@@ -25,6 +25,7 @@ Every number here was either read from the code or artifacts, or measured on the
 | [09_runtime_performance.md](09_runtime_performance.md) | GPU benchmarks, stride selection, live measurements, bugs found and their measured effect | Experiments: real-time |
 | [10_limitations_future_work.md](10_limitations_future_work.md) | What is unvalidated, known weaknesses, next experiments | Limitations, Future work |
 | [11_reproducibility.md](11_reproducibility.md) | Versions, hardware, commands, seeds, file inventory, commit history | Reproducibility / appendix |
+| [12_congestion_control_evaluation.md](12_congestion_control_evaluation.md) | How the rule-based decisions are tested: scenario suite, invariants, closed-loop simulation; baseline results for engine v1 and its known weaknesses | Method: evaluation, Results |
 
 ## Key numbers
 
@@ -40,7 +41,8 @@ Every number here was either read from the code or artifacts, or measured on the
 | Sitting | precision 0.158, recall 0.379 | re-scored |
 | Detector recall on labelled seated people | 26% with the shipped detector (pose-m @1280); 45% best observed (det-l @1440) | own study, IoU ≥ 0.3 |
 | Real-time | 3 cameras, 27 fps playback per gate, 3.9 analysed fps per gate, on an RTX 3050 6 GB laptop GPU | live measurement |
-| Tests | 269 unit tests, no GPU needed | `pytest` |
+| Tests | 918 tests + 4 expected failures (known engine weaknesses), no GPU needed | `pytest` |
+| Decision evaluation | engine v1 removes > 99.9% of exposure at ≥5 people/m² vs no control in 6 simulated scenarios; up to 1,426 instruction changes/h | [12](12_congestion_control_evaluation.md) |
 
 ## Contributions you can defensibly claim
 

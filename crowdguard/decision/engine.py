@@ -21,6 +21,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from collections.abc import Callable
 
 from crowdguard.decision.config import DecisionConfig
 from crowdguard.decision.contracts import (
@@ -48,9 +49,24 @@ class DecisionEngine:
     4. emit an explainable :class:`DecisionResult`.
     """
 
-    def __init__(self, venue: VenueTopology, config: DecisionConfig | None = None) -> None:
+    def __init__(
+        self,
+        venue: VenueTopology,
+        config: DecisionConfig | None = None,
+        clock: Callable[[], float] | None = None,
+    ) -> None:
+        """
+        Args:
+            venue: Gate graph the engine routes over.
+            config: Thresholds and weights; defaults when omitted.
+            clock: Source of "now" in seconds, used for hysteresis timing and
+                decision timestamps. Defaults to wall-clock time. Simulation
+                and tests pass a virtual clock so time can run faster than real
+                time without breaking the cooldown logic.
+        """
         self._venue = venue
         self._config = config or DecisionConfig()
+        self._clock: Callable[[], float] = clock or time.time
 
         # gate_id -> (target_gate_id, decision_timestamp)
         self._active_diversions: dict[str, tuple[str, float]] = {}
@@ -90,7 +106,7 @@ class DecisionEngine:
             One :class:`DecisionResult` per evaluated gate, in venue gate order.
         """
         results: list[DecisionResult] = []
-        now = time.time()
+        now = self._clock()
 
         for gate_id in self._venue.gate_ids:
             state = states.get(gate_id)
@@ -270,7 +286,7 @@ class DecisionEngine:
     ) -> DecisionResult:
         return DecisionResult(
             decision_id=DecisionResult.generate_id(),
-            timestamp=time.time(),
+            timestamp=self._clock(),
             source_gate_id=source_gate_id,
             action=action,
             target_gate_id=target_gate_id,

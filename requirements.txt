@@ -29,5 +29,9 @@ ultralytics>=8.0.0           # YOLO pose + ByteTrack
 scikit-learn>=1.3.0
 catboost>=1.2
 
+# --- decision-policy evaluation (scripts/evaluate_decisions.py) ---------
+matplotlib>=3.7.0
+scipy>=1.10.0
+
 # --- tests --------------------------------------------------------------
 pytest>=7.4.0

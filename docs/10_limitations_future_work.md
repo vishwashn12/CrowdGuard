@@ -19,7 +19,7 @@
 
 ### Counting and congestion
 10. **CSRNet has no valid evaluation on this footage.** The prototype's validation compared against annotation-box counts, not crowd counts. The model is used off the shelf from ShanghaiTech Part A, and the shipped single-scale setting under-counts by about 10% relative to 3-scale.
-11. **Congestion and routing are unvalidated heuristics.** All weights and thresholds are hand-set. In the current code, `capacity_utilization` equals `density_score`, so the formula weights one quantity at 0.8.
+11. **Congestion and routing are heuristics validated only in simulation.** All weights and thresholds are hand-set; the closed-loop evaluation ([12](12_congestion_control_evaluation.md)) uses a macroscopic model with assumed parameters, not field data. In the current code, `capacity_utilization` equals `density_score`, so the formula weights one quantity at 0.8.
 12. **Calibration is per camera and per venue.** `max_expected_velocity` is in px/s and depends on resolution, zoom and distance. Gate capacities are placeholders. Distances assume an idealised ring.
 13. **No perspective correction.** Pixel speeds and sizes vary with depth. Only `pos_y_norm` addresses this.
 
@@ -42,4 +42,4 @@
 | 8 | **Fix the congestion formula** (separate density per area from utilisation) and calibrate thresholds against expert-labelled clips | turns the heuristic into a validated score | high |
 | 9 | **Leave-one-video-out** over all 10 videos as a second protocol | robustness of the reported numbers | low |
 | 10 | **Temporal model** over feature sequences (a GRU or a small transformer on a track window) | uses temporal context the per-frame model ignores | high |
-| 11 | **Simulation of diversion policies** (agent-based, using the venue graph) | evaluates the decision layer without real incidents | high |
+| 11 | **Microscopic check of the diversion results** (agent-based, e.g. JuPedSim). The macroscopic closed-loop evaluation is done ([12](12_congestion_control_evaluation.md)) | confirms the simulated gains hold with pedestrian-level physics | high |

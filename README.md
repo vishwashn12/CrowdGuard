@@ -477,7 +477,9 @@ crowdguard/
 ├── scripts/
 │   ├── run_server.py              entry point
 │   └── benchmark_gpu.py           measure throughput, recommend a stride
-└── tests/                         269 tests, no GPU required
+├── crowdguard/simulation/         closed-loop crowd model + policies for evaluating decisions
+├── reports/decision_eval/         evaluation results (tables, CSVs, figures)
+└── tests/                         ~920 tests, no GPU required
 ```
 
 ---
@@ -488,13 +490,19 @@ crowdguard/
 python -m pytest tests -q
 ```
 
-269 tests, ~3 seconds, no GPU and no model weights needed — a direct consequence
+918 tests (plus 4 expected failures that document known engine weaknesses), ~20 seconds, no GPU and no model weights needed — a direct consequence
 of keeping the decision layer model-agnostic and the tracker free of inference.
 They cover the venue graph and perimeter routing, congestion scoring and the
 missing-motion path, every engine safety refusal, hysteresis, routing with and
 without cameras, the 10-D feature vector and pose geometry, the ID-theft guards
 and speed veto, synchroniser causality, every alert rule, dedup and escalation,
 buffer drop policies, the dual-rate producer, and the layering invariant itself.
+The decision engine also has a scenario suite, 600 random-venue invariant checks
+and a tested closed-loop simulator; see `docs/12_congestion_control_evaluation.md`.
+
+```bash
+python scripts/evaluate_decisions.py          # policy evaluation, CPU only, ~16 min on 6 cores
+```
 
 ---
 

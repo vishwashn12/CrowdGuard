@@ -52,7 +52,9 @@ The controlled ablation script used for [04](04_ablation_and_validity.md) is sho
 ```bash
 cd crowdguard
 venv\Scripts\activate
-python -m pytest tests -q                                  # 269 tests, about 3 s, no GPU
+python -m pytest tests -q                                  # ~920 tests incl. 600 random invariant cases; 4 xfail = known engine weaknesses
+python scripts/evaluate_decisions.py                       # closed-loop policy evaluation, CPU only, ~15-20 min on 6 cores
+python scripts/evaluate_decisions.py --quick               # 20 seeds, ~4 min
 python scripts/benchmark_gpu.py --video "path/to/clip.mp4" --cameras 3
 python scripts/run_server.py                               # http://localhost:8000
 python scripts/run_server.py --config config/app/demo_samples.yaml   # 3 demo gates staged

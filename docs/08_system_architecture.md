@@ -9,7 +9,7 @@
 | Configuration | Pydantic v2 schemas, YAML files, `.env` overrides |
 | Server | FastAPI + Uvicorn (ASGI): REST, 2 WebSockets, upload handling |
 | Frontend | plain HTML, CSS and JavaScript with no framework or build step; canvas video, SVG venue map |
-| Tests | pytest, 269 tests, no GPU or weights needed |
+| Tests | pytest, 918 tests + 4 documented expected failures, no GPU or weights needed |
 
 The whole system is **one process**. Pipeline threads and the web server share one address space and one CUDA context.
 
