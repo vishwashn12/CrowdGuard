@@ -1,0 +1,33 @@
+# CrowdGuard dependencies.
+#
+# Install PyTorch first, matched to your CUDA version, then this file:
+#
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+#   pip install -r requirements.txt
+
+# --- core ---------------------------------------------------------------
+numpy>=1.24.0
+opencv-python>=4.8.0
+pydantic>=2.0.0
+pyyaml>=6.0
+pillow>=10.0.0
+
+# --- web ----------------------------------------------------------------
+fastapi>=0.100.0
+uvicorn[standard]>=0.23.0
+websockets>=12.0
+python-multipart>=0.0.6      # required by FastAPI for multipart file uploads
+
+# --- vision models ------------------------------------------------------
+torch>=2.0.0
+torchvision>=0.15.0
+ultralytics>=8.0.0           # YOLO pose + ByteTrack
+
+# --- anomaly classifier -------------------------------------------------
+# scikit-learn supplies the StandardScaler that is pickled alongside the model;
+# catboost is needed to unpickle the shipped CatBoost estimator.
+scikit-learn>=1.3.0
+catboost>=1.2
+
+# --- tests --------------------------------------------------------------
+pytest>=7.4.0

@@ -1,0 +1,45 @@
+# Secrets and local configuration
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+venv/
+.venv/
+env/
+
+# Model weights: large binaries, fetched or copied rather than committed.
+# best_model.pkl is the exception - it is this project's own artifact and small
+# enough to track, so it is force-added below.
+*.pt
+*.pth
+*.onnx
+assets/*.pkl
+!assets/best_model.pkl
+
+# Operator uploads and runtime output
+uploads/
+logs/
+outputs/
+snapshots/
+
+# Media
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.m4v
+
+# Tooling leftovers
+catboost_info/
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Dedicated browser profile used by scripts/open_dashboard.py
+.dashboard-profile/

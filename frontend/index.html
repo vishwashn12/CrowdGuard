@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CrowdGuard</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+<!-- ══ Header: identity, worst-state, view switch ══════════════════ -->
+<header class="appbar">
+  <div class="appbar-brand">
+    <span class="mark" aria-hidden="true"></span>
+    <span class="wordmark">CrowdGuard</span>
+  </div>
+
+  <nav class="viewswitch" role="tablist" aria-label="Views">
+    <button class="viewswitch-btn is-active" data-view="monitor" role="tab" type="button">Monitor</button>
+    <button class="viewswitch-btn" data-view="setup" role="tab" type="button">Setup</button>
+  </nav>
+
+  <div class="appbar-right">
+    <span class="session-chip" id="sessionChip" data-state="setup">Setup</span>
+    <button class="btn btn-sm is-hidden" id="sessionBtn" type="button">Start</button>
+    <span class="link" id="connDot" title="Connection"></span>
+    <span class="appbar-meta mono" id="appbarMeta">&mdash;</span>
+  </div>
+</header>
+
+<!-- ══ Banner: only ever the single most urgent thing ══════════════ -->
+<div class="banner is-hidden" id="banner" role="status">
+  <span class="banner-sev" id="bannerSev"></span>
+  <div class="banner-body">
+    <strong id="bannerTitle"></strong>
+    <span id="bannerAction"></span>
+  </div>
+  <span class="banner-count" id="bannerCount"></span>
+</div>
+
+<!-- ══════════════════════ MONITOR ════════════════════════════════ -->
+<main class="view is-active" id="view-monitor">
+
+  <!-- empty state: nothing configured yet -->
+  <section class="firstrun is-hidden" id="firstRun">
+    <h1>No footage yet</h1>
+    <p>
+      Choose how many gates your venue has, then upload footage to each one.
+      Gates without footage still take part in crowd routing as diversion
+      targets.
+    </p>
+    <button class="btn btn-primary" data-goto="setup" type="button">Set up venue</button>
+  </section>
+
+  <!-- footage staged, not yet started -->
+  <section class="readybar is-hidden" id="readyBar">
+    <div>
+      <strong id="readyTitle">Footage ready</strong>
+      <span>All gates start together and play at the footage&rsquo;s real frame rate.</span>
+    </div>
+    <button class="btn btn-primary" data-action="start" type="button">Start monitoring</button>
+  </section>
+
+  <div class="monitor-grid" id="monitorGrid">
+
+    <!-- primary column: the gates -->
+    <section class="col-main">
+      <div class="section-head">
+        <h2>Gates</h2>
+        <span class="section-note" id="gateSummary"></span>
+      </div>
+      <div class="gates" id="gates"></div>
+    </section>
+
+    <!-- secondary column: map, then advisories -->
+    <aside class="col-side">
+      <section class="card">
+        <div class="section-head">
+          <h2>Venue</h2>
+          <span class="section-note">diversions follow the ring</span>
+        </div>
+        <svg id="map" viewBox="0 0 300 300" role="img" aria-label="Gate layout"></svg>
+      </section>
+
+      <section class="card">
+        <div class="section-head">
+          <h2>Advisories</h2>
+          <span class="section-note" id="advisoryCount"></span>
+        </div>
+        <div class="advisories" id="advisories"></div>
+      </section>
+    </aside>
+  </div>
+
+  <details class="diag" id="diag">
+    <summary>Pipeline diagnostics</summary>
+    <div class="diag-grid" id="diagGrid"></div>
+  </details>
+</main>
+
+<!-- ══════════════════════ SETUP ══════════════════════════════════ -->
+<main class="view" id="view-setup">
+  <div class="setup-wrap">
+
+    <div class="lockbar is-hidden" id="lockBar">
+      Monitoring is running, so setup is locked. Stop monitoring to change gates or footage.
+    </div>
+
+    <section class="card setup-step" id="stepLayout">
+      <div class="step-head">
+        <span class="step-num">1</span>
+        <div>
+          <h2>How many gates?</h2>
+          <p class="step-hint">
+            Gates are placed evenly on a perimeter ring, so a congested gate can
+            divert along the outside of the venue. Growing the venue keeps your
+            existing gates and footage; shrinking it stops feeds on gates that
+            no longer exist.
+          </p>
+        </div>
+      </div>
+
+      <div class="gatecount">
+        <div class="gatecount-pick" id="gateCountPick"></div>
+        <label class="gatecount-custom">
+          <span>or</span>
+          <input type="number" id="gateCountInput" min="2" max="24" step="1" />
+          <span>gates</span>
+        </label>
+      </div>
+
+      <div class="setup-row">
+        <label class="field">
+          <span>Default capacity per gate</span>
+          <input type="number" id="capacityInput" min="1" step="10" value="500" />
+          <small>People a gate can hold. Drives every congestion threshold.</small>
+        </label>
+        <label class="field">
+          <span>Venue radius (m)</span>
+          <input type="number" id="radiusInput" min="5" step="5" value="120" />
+          <small>Sets walking distance between neighbouring gates.</small>
+        </label>
+      </div>
+
+      <div class="setup-actions">
+        <button class="btn btn-primary" id="applyVenue" type="button">Apply layout</button>
+        <span class="setup-status" id="venueStatus"></span>
+      </div>
+    </section>
+
+    <section class="card setup-step" id="stepFootage">
+      <div class="step-head">
+        <span class="step-num">2</span>
+        <div>
+          <h2>Add footage</h2>
+          <p class="step-hint">
+            Upload a video per gate. Nothing plays yet &mdash; each gate shows a
+            still of its first frame until you start. Leave a gate empty and it
+            stays a routing target based on its stated capacity.
+          </p>
+        </div>
+      </div>
+      <div class="assign" id="assign"></div>
+    </section>
+
+    <section class="card setup-step" id="stepStart">
+      <div class="step-head">
+        <span class="step-num">3</span>
+        <div>
+          <h2>Start monitoring</h2>
+          <p class="step-hint">
+            Every gate with footage starts at the same instant and plays at its
+            real frame rate. Clips loop when they end.
+          </p>
+        </div>
+      </div>
+      <div class="start-row">
+        <button class="btn btn-primary btn-lg" id="startBtn" data-action="start" type="button" disabled>
+          Start monitoring
+        </button>
+        <span class="setup-status" id="startStatus">Upload footage to at least one gate first.</span>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<input type="file" id="fileInput" accept=".mp4,.avi,.mov,.mkv,.m4v" hidden />
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

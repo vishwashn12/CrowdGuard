@@ -1,0 +1,57 @@
+/* Design tokens.
+ *
+ * Control-room rules:
+ *  - The surface is quiet (near-black blue-grey). Colour is reserved for
+ *    STATUS (congestion levels, severities) and ACTION (the blue accent used
+ *    only for recommendations and diversions), so colour always means something.
+ *  - Levels run green -> yellow -> orange -> red and always carry a text label
+ *    as well, so they never rely on hue alone.
+ *  - Person-level anomalies use violet / pink, separate from crowd congestion.
+ */
+:root {
+  color-scheme: dark;
+
+  --bg: #06090d;
+  --bg-grid: rgba(120, 150, 190, 0.035);
+  --panel: #0c1118;
+  --panel-2: #111823;
+  --panel-3: #172030;
+  --line: #1d2734;
+  --line-soft: #151d29;
+  --line-strong: #2a3748;
+
+  --ink: #e7edf5;
+  --ink-2: #a7b4c4;
+  --ink-3: #6c7b8e;
+  --ink-4: #4a5768;
+
+  --accent: #3ea6ff;
+  --accent-soft: rgba(62, 166, 255, 0.14);
+  --accent-ink: #061522;
+
+  --lv-low: #2fc48d;
+  --lv-moderate: #e9c84a;
+  --lv-high: #ff8a3d;
+  --lv-critical: #ff4d5e;
+  --lv-none: #3b4757;
+
+  --sev-emergency: var(--lv-critical);
+  --sev-alert: var(--lv-high);
+  --sev-warning: var(--lv-moderate);
+  --sev-info: var(--ink-3);
+
+  --anom: #b884ff;     /* sitting / fallen */
+  --counter: #ff6fb5;  /* counter-flow */
+
+  --field-1: #0f1823;
+  --field-2: #0a1018;
+  --ring-band: #111a26;
+
+  --radius: 12px;
+  --radius-sm: 8px;
+  --shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  --font: 'Inter Variable', Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, 'Cascadia Mono', monospace;
+
+  --topbar-h: 60px;
+}

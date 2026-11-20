@@ -1,0 +1,132 @@
+# Default application configuration.
+#
+# No cameras are declared: every gate starts unmonitored and the operator
+# uploads footage per gate from the dashboard. Add entries under `cameras:` only
+# if you want feeds bound at startup - see config/app/demo_samples.yaml.
+#
+# Any value here can be overridden by an environment variable; see .env.example.
+
+venue_config: config/venue/circular_venue.yaml
+
+dataset:
+  name: operator-uploads
+  root: uploads
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MEASURED on an RTX 3050 6GB laptop GPU, 1440x1080 @ 27 fps footage,
+# yolov8m-pose @ 1280 FP16 with the anomaly classifier, single-scale CSRNet,
+# sized for ~77% device load. Re-run scripts/benchmark_gpu.py on other hardware.
+#
+#     1 camera   density 1.0 fps,  anomaly_stride 2
+#     2 cameras  density 1.0 fps,  anomaly_stride 5
+#     3 cameras  density 0.5 fps,  anomaly_stride 7   <- set below
+#
+# The stride only sets how often boxes and labels refresh. Playback always runs
+# at the footage's full frame rate (see the display section).
+#
+# Confirm after pressing Start:  curl -s localhost:8000/api/stats
+# buffers.anomaly.dropped should stay near zero. If it climbs, raise
+# anomaly_stride by 1.
+# ─────────────────────────────────────────────────────────────────────────────
+
+ingestion:
+  # CSRNet path. Crowd density changes over tens of seconds, so a low rate
+  # costs almost nothing here and buys the pose branch a lot of room. This is
+  # deliberately the first thing traded away.
+  density_fps: 0.5
+
+  # Pose/anomaly path. 1 means every frame, which is the rate the anomaly
+  # classifier was trained at and the only setting where its trajectory
+  # features are exactly right. 7 is what fits three cameras at 1280 on a
+  # 3050; one camera can run 2.
+  anomaly_stride: 7
+
+  # Pace reads to the source frame rate so a recorded file behaves like a live
+  # feed. Set false to grind through a file as fast as the models allow.
+  real_time_mode: true
+
+  buffer_size: 30
+  drop_policy: oldest
+
+  # Restart uploaded clips on EOF, so a short demo file keeps the gate live.
+  loop_sources: true
+
+models:
+  device: auto
+
+  csrnet:
+    enabled: true
+    checkpoint_path: checkpoints/PartAmodel_best.pth
+
+    # Keep the native resolution. Lowering it is poor value: measured, 512x384
+    # costs 23% of the crowd count for savings a single scale gets for 10%.
+    inference_resolution: [720, 540]
+
+    # Single scale: ~74 ms/frame against ~203 ms for the calibrated three-scale
+    # paper pipeline, at the cost of under-counting by roughly 10%
+    # (141 vs 157 on the sample clip).
+    #
+    # IMPORTANT: the count feeds density_score, which drives every congestion
+    # threshold, so gate capacities must be calibrated against whichever scale
+    # set you run. Under-counting means under-reacting. The capacities in
+    # config/venue/circular_venue.yaml are placeholders and need setting from
+    # real observed occupancy at your venue before operational use.
+    #
+    # For the most accurate counts, and if you have the GPU headroom:
+    #   scales: [0.7, 1.0, 1.3]
+    scales: [1.0]
+
+    # Refuse to start rather than emit counts from untrained weights.
+    strict_checkpoint: true
+
+  posetrack:
+    enabled: true
+    # Medium pose model at 1280. Measured on the labelled Hajj test footage, the
+    # resolution mattered more than model size: yolov8m-pose found 16% of
+    # labelled seated people at 960 but 26% at 1280. Boxes come back in
+    # original-frame pixels at any imgsz, so the classifier's features keep
+    # their scale.
+    model_path: assets/yolov8m-pose.pt
+    tracker_config: bytetrack.yaml
+    confidence_threshold: 0.15
+    iou_threshold: 0.5
+    imgsz: 1280
+    fp16: true          # ~1.7x faster on CUDA with identical detections
+    max_det: 300
+    motion_threshold_px: 2.0
+
+  anomaly:
+    enabled: true
+    classifier_path: assets/best_model.pkl
+
+    # These reproduce the training-time constants. Changing them shifts the
+    # classifier's input distribution without raising an error, so leave them
+    # alone unless you retrain the model to match.
+    direction_window: 15
+    min_speed_px: 2.0
+    history_length: 60
+    min_track_frames: 10
+    confirm_frames: 5
+    min_crowd_people: 3
+    opposite_threshold: -0.5
+
+    # Safeguards against ID theft through occlusion.
+    sitting_veto_speed_px: 3.0
+    lost_track_buffer_frames: 30
+    restitch_min_iou: 0.3
+    stationary_restitch_max_dist_px: 30.0
+
+# Operator playback, independent of analysis speed. Every source frame is shown
+# at the footage's own frame rate on the session clock, delay_s behind live so
+# that each displayed frame's analysis is already finished and its boxes sit on
+# the right people. Boxes are interpolated between analysed frames.
+display:
+  delay_s: 0.5
+  width: 960          # display frames are scaled to this before encoding
+  jpeg_quality: 75
+  buffer_s: 1.5
+
+uploads:
+  directory: uploads
+  max_bytes: 2147483648   # 2 GB per file
+  allowed_suffixes: ['.mp4', '.avi', '.mov', '.mkv', '.m4v']

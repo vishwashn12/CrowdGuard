@@ -1,0 +1,107 @@
+# Demo configuration: three gates bound at startup to the sample clips that
+# already exist in the sibling crowd_management project.
+#
+# These paths READ from ../crowd_management; nothing in that folder is written
+# or modified. If you move or delete those clips, either point `source` at your
+# own files, copy them into crowdguard/uploads/, or just use the default config
+# and upload footage from the dashboard instead.
+#
+# Run with:  python scripts/run_server.py --config config/app/demo_samples.yaml
+
+venue_config: config/venue/circular_venue.yaml
+
+dataset:
+  name: HAJJv2-samples
+  root: ../crowd_management/video samples
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MEASURED on an RTX 3050 6GB laptop GPU, 1440x1080 @ 27 fps footage,
+# yolov8m-pose @ 1280 FP16 with the anomaly classifier, single-scale CSRNet,
+# sized for ~77% device load. Re-run scripts/benchmark_gpu.py on other hardware.
+#
+#     1 camera   density 1.0 fps,  anomaly_stride 2
+#     2 cameras  density 1.0 fps,  anomaly_stride 5
+#     3 cameras  density 0.5 fps,  anomaly_stride 7   <- set below
+#
+# The stride only sets how often boxes and labels refresh. Playback always runs
+# at the footage's full frame rate (see the display section).
+#
+# Confirm after pressing Start:  curl -s localhost:8000/api/stats
+# buffers.anomaly.dropped should stay near zero. If it climbs, raise
+# anomaly_stride by 1.
+# ─────────────────────────────────────────────────────────────────────────────
+
+ingestion:
+  density_fps: 0.5
+  anomaly_stride: 7
+  real_time_mode: true
+  buffer_size: 30
+  drop_policy: oldest
+  loop_sources: true
+
+cameras:
+  - camera_id: cam_g1
+    name: North Gate feed
+    source_type: video
+    source: ../crowd_management/video samples/2.mp4
+    gate_id: G1
+    enabled: true
+
+  - camera_id: cam_g2
+    name: North-East Gate feed
+    source_type: video
+    source: ../crowd_management/video samples/5.mp4
+    gate_id: G2
+    enabled: true
+
+  - camera_id: cam_g4
+    name: South Gate feed
+    source_type: video
+    source: ../crowd_management/video samples/3.mp4
+    gate_id: G4
+    enabled: true
+
+models:
+  device: auto
+
+  csrnet:
+    enabled: true
+    checkpoint_path: checkpoints/PartAmodel_best.pth
+    inference_resolution: [720, 540]
+    # Single scale to fit three cameras; see config/app/default.yaml for the
+    # count-accuracy trade this makes and the capacity-calibration caveat.
+    scales: [1.0]
+    strict_checkpoint: true
+
+  posetrack:
+    enabled: true
+    # Medium pose model at 1280. Measured on the labelled Hajj test footage, the
+    # resolution mattered more than model size: yolov8m-pose found 16% of
+    # labelled seated people at 960 but 26% at 1280. Boxes come back in
+    # original-frame pixels at any imgsz, so the classifier's features keep
+    # their scale.
+    model_path: assets/yolov8m-pose.pt
+    tracker_config: bytetrack.yaml
+    confidence_threshold: 0.15
+    iou_threshold: 0.5
+    imgsz: 1280
+    fp16: true          # ~1.7x faster on CUDA with identical detections
+    max_det: 300
+    motion_threshold_px: 2.0
+
+  anomaly:
+    enabled: true
+    classifier_path: assets/best_model.pkl
+
+# Operator playback, independent of analysis speed. Every source frame is shown
+# at the footage's own frame rate on the session clock, delay_s behind live so
+# that each displayed frame's analysis is already finished and its boxes sit on
+# the right people. Boxes are interpolated between analysed frames.
+display:
+  delay_s: 0.5
+  width: 960          # display frames are scaled to this before encoding
+  jpeg_quality: 75
+  buffer_s: 1.5
+
+uploads:
+  directory: uploads
