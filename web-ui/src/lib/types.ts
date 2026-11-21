@@ -132,6 +132,15 @@ export interface VenueSummary {
   gate_count?: number;
   radius_m?: number;
   gates?: VenueGate[];
+  segments?: Segment[];
+  perimeter_m?: number;
+}
+
+/** Walking distance along the perimeter from one gate to the next. */
+export interface Segment {
+  from: string;
+  to: string;
+  distance_m: number;
 }
 
 export interface Snapshot {
@@ -193,6 +202,8 @@ export interface VenueConfig {
   venue_name: string;
   min_gates: number;
   max_gates: number;
+  segments: Segment[];
+  perimeter_m: number;
   gates: {
     gate_id: string;
     name: string;

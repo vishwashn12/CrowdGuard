@@ -32,6 +32,7 @@ export function SetupView({ snap, busy, onSession }: Props) {
   const [cfg, setCfg] = useState<VenueConfig | null>(null);
   const [count, setCount] = useState<number | null>(null);
   const [venueName, setVenueName] = useState('');
+  const [dists, setDists] = useState<string[]>([]);
   const [applying, setApplying] = useState(false);
   const [uploads, setUploads] = useState<UploadState>({});
   const [dragOver, setDragOver] = useState<string | null>(null);
@@ -49,6 +50,7 @@ export function SetupView({ snap, busy, onSession }: Props) {
       if (resetForm) {
         setCount(c.gate_count);
         setVenueName(c.venue_name || '');
+        setDists(c.segments.map((x) => String(Math.round(x.distance_m))));
       }
     } catch { /* retried on next change */ }
   }, []);
@@ -64,16 +66,28 @@ export function SetupView({ snap, busy, onSession }: Props) {
   }
 
   const pickedCount = count ?? cfg.gate_count;
+  // Default spacing for a new gate count: the same perimeter, shared evenly.
+  const evenDistance = Math.round((cfg.perimeter_m || 754) / pickedCount);
+  const currentDists = cfg.segments.map((x) => Math.round(x.distance_m));
+  const distValues = dists.length === pickedCount ? dists : Array(pickedCount).fill(String(evenDistance));
+  const distNums = distValues.map((d) => parseFloat(d));
+  const distsValid = distNums.every((d) => Number.isFinite(d) && d > 0 && d <= 5000);
+  const distsChanged = pickedCount !== cfg.gate_count || distNums.some((d, i) => Math.round(d) !== currentDists[i]);
+  const gateIdAt = (i: number) => `G${(i % pickedCount) + 1}`;
   const dropsFeeds = cfg.gates.filter((g, i) => i >= pickedCount && g.is_monitored);
   const monitored = new Set(cfg.gates.filter((g) => g.is_monitored).map((g) => g.gate_id));
   const calibrated = cfg.gates.filter((g) => g.calibration).length;
-  const layoutDirty = pickedCount !== cfg.gate_count || (venueName || '') !== (cfg.venue_name || '');
+  const layoutDirty = pickedCount !== cfg.gate_count || (venueName || '') !== (cfg.venue_name || '') || distsChanged;
   const calGate = calibrating ? cfg.gates.find((g) => g.gate_id === calibrating) : undefined;
 
   const apply = async () => {
     setApplying(true);
     try {
-      const r = await api.configureVenue({ gate_count: pickedCount, venue_name: venueName.trim() || undefined });
+      const r = await api.configureVenue({
+        gate_count: pickedCount,
+        venue_name: venueName.trim() || undefined,
+        segment_distances: distNums,
+      });
       const bits = [];
       if (r.cameras_stopped.length) bits.push(`${r.cameras_stopped.length} feed(s) stopped`);
       if (r.cameras_kept.length) bits.push(`${r.cameras_kept.length} kept`);
@@ -168,15 +182,41 @@ export function SetupView({ snap, busy, onSession }: Props) {
             <span className="step-num">1</span>
             <div>
               <h2>How many gates?</h2>
-              <p>Gates sit evenly around the venue, so a crowded gate can send people along the outer path to another one.</p>
+              <p>Gates sit around the venue on an outer path, so a crowded gate can send people along it to another gate. Enter how far apart they really are.</p>
             </div>
           </header>
 
           <div className="chips">
             {PRESETS.filter((p) => p >= cfg.min_gates && p <= cfg.max_gates).map((p) => (
-              <button key={p} type="button" className={`chip ${p === pickedCount ? 'on' : ''}`} onClick={() => setCount(p)} disabled={running}>{p}</button>
+              <button key={p} type="button" className={`chip ${p === pickedCount ? 'on' : ''}`} disabled={running}
+                onClick={() => {
+                  setCount(p);
+                  setDists(p === cfg.gate_count ? currentDists.map(String)
+                    : Array(p).fill(String(Math.round((cfg.perimeter_m || 754) / p))));
+                }}>{p}</button>
             ))}
           </div>
+
+          <div className="field-label">Walking distance to the next gate, along the outer path</div>
+          <div className="dists">
+            {distValues.map((d, i) => (
+              <label key={i} className={`dist ${Number.isFinite(distNums[i]) && distNums[i] > 0 && distNums[i] <= 5000 ? '' : 'bad'}`}>
+                <span className="dist-pair">{gateIdAt(i)} → {gateIdAt(i + 1)}</span>
+                <input type="number" min={1} max={5000} step={10} value={d} disabled={running}
+                  onChange={(e) => setDists(distValues.map((v, k) => (k === i ? e.target.value : v)))} />
+                <span className="dist-unit">m</span>
+              </label>
+            ))}
+          </div>
+          <p className="hint">
+            Total perimeter {Math.round(distNums.reduce((a, b) => a + (Number.isFinite(b) ? b : 0), 0))} m.
+            Walking distance drives which gate people are sent to and how long they take to get there.
+            {' '}<button type="button" className="link-btn" disabled={running}
+              onClick={() => {
+                const total = distNums.reduce((a, b) => a + (Number.isFinite(b) ? b : 0), 0) || pickedCount * evenDistance;
+                setDists(Array(pickedCount).fill(String(Math.round(total / pickedCount))));
+              }}>Make all equal</button>
+          </p>
 
           <div className="fields fields-1">
             <label className="field">
@@ -190,7 +230,7 @@ export function SetupView({ snap, busy, onSession }: Props) {
           )}
 
           <div className="step-actions">
-            <button type="button" className="btn btn-primary" onClick={apply} disabled={running || applying || !layoutDirty}>
+            <button type="button" className="btn btn-primary" onClick={apply} disabled={running || applying || !layoutDirty || !distsValid}>
               {applying ? <Loader2 size={15} className="spin" /> : <RefreshCw size={15} />} Apply
             </button>
             {!layoutDirty && <span className="muted"><CheckCircle2 size={14} /> {cfg.gate_count} gates set</span>}
@@ -286,7 +326,7 @@ export function SetupView({ snap, busy, onSession }: Props) {
 
       <aside className="setup-side panel">
         <header className="panel-head"><h2>Preview</h2></header>
-        <RingPreview count={pickedCount} monitored={monitored} />
+        <RingPreview count={pickedCount} monitored={monitored} segments={distsValid ? distNums : undefined} />
         <dl className="summary">
           <div><dt>Gates</dt><dd>{pickedCount}{pickedCount !== cfg.gate_count && <small> (now {cfg.gate_count})</small>}</dd></div>
           <div><dt>With footage</dt><dd>{monitored.size}</dd></div>

@@ -141,3 +141,51 @@ class TestGrowAndShrink:
         four = build_ring_topology(4, radius_m=100.0)
         eight = build_ring_topology(8, radius_m=100.0)
         assert eight.direct_distance("G1", "G2") < four.direct_distance("G1", "G2")
+
+
+class TestWalkingDistances:
+    """Gates need not be evenly spaced: each ring segment has its own length."""
+
+    def test_even_ring_by_default(self):
+        venue = build_ring_topology(3, radius_m=120.0)
+        segs = venue.ring_segments_m()
+        assert len(segs) == 3 and max(segs) == pytest.approx(min(segs))
+        assert sum(segs) == pytest.approx(2 * 3.14159265 * 120.0, rel=1e-6)
+
+    def test_uneven_segments_set_shortest_distances(self):
+        venue = build_ring_topology(4, segment_distances=[400, 100, 100, 100])
+        assert venue.shortest_distance("G1", "G4") == 100
+        assert venue.shortest_distance("G1", "G2") == 300   # the long way round is shorter
+
+    def test_route_goes_the_shorter_way_in_metres_not_gates(self):
+        venue = build_ring_topology(4, segment_distances=[400, 100, 100, 100])
+        assert venue.perimeter_path("G1", "G2") == ["G1", "G4", "G3", "G2"]
+        assert venue.perimeter_path("G2", "G3") == ["G2", "G3"]
+
+    def test_two_gates_use_the_shorter_side(self):
+        venue = build_ring_topology(2, segment_distances=[300, 80])
+        assert venue.shortest_distance("G1", "G2") == 80
+        assert venue.shortest_distance("G2", "G1") == 80
+
+    def test_summary_lists_segments(self):
+        s = build_ring_topology(3, segment_distances=[50, 60, 70]).summary()
+        assert [(x["from"], x["to"], x["distance_m"]) for x in s["segments"]] == [
+            ("G1", "G2", 50), ("G2", "G3", 60), ("G3", "G1", 70)]
+        assert s["perimeter_m"] == 180
+
+    @pytest.mark.parametrize("bad", [[100, 100], [100, 0, 100], [100, -5, 100], [100, 6000, 100]])
+    def test_rejects_bad_distances(self, bad):
+        with pytest.raises(ValueError):
+            build_ring_venue(3, segment_distances=bad)
+
+    def test_engine_prefers_the_gate_that_is_nearer_in_metres(self):
+        """Two equally loaded neighbours: the engine picks the shorter walk."""
+        from conftest import make_state
+        from crowdguard.decision.engine import DecisionEngine
+        venue = build_ring_topology(6, segment_distances=[450, 120, 120, 120, 120, 70])
+        states = {g: make_state(g, crowd_count=420) for g in venue.gate_ids}   # busy, not viable
+        states["G1"] = make_state("G1", crowd_count=480, velocity=8.0)
+        states["G2"] = make_state("G2", crowd_count=100)                       # 450 m away
+        states["G6"] = make_state("G6", crowd_count=100)                       # 70 m away
+        decision = next(d for d in DecisionEngine(venue).evaluate(states) if d.source_gate_id == "G1")
+        assert decision.target_gate_id == "G6"

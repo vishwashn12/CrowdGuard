@@ -47,6 +47,28 @@ export function ringOrder(snap: Snapshot): string[] {
   return naturalSort(ids);
 }
 
+/** Angle of each gate on the drawn ring (radians, 0 = right, gate 1 at the
+ *  top), spaced by real walking distance when segment lengths are known, so
+ *  a gate that is far from its neighbour is drawn far from it. */
+export function ringAngles(n: number, segments?: number[]): number[] {
+  const TAU = Math.PI * 2;
+  const segs = segments && segments.length === n && segments.every((d) => d > 0) ? segments : null;
+  if (!segs) return Array.from({ length: n }, (_, i) => (i / n) * TAU - Math.PI / 2);
+  const total = segs.reduce((a, b) => a + b, 0);
+  let acc = 0;
+  return segs.map((d) => {
+    const a = (acc / total) * TAU - Math.PI / 2;
+    acc += d;
+    return a;
+  });
+}
+
+/** Segment lengths of a snapshot's venue, in gate order, if known. */
+export function segmentLengths(snap: Snapshot): number[] | undefined {
+  const segs = snap.venue?.segments;
+  return segs && segs.length ? segs.map((s) => s.distance_m) : undefined;
+}
+
 export function fmtClock(sec: number): string {
   const t = Math.max(0, Math.floor(sec || 0));
   const h = Math.floor(t / 3600);

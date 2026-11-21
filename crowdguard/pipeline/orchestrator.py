@@ -573,8 +573,13 @@ class Orchestrator:
         radius_m: float | None = None,
         capacities: dict[str, int] | None = None,
         venue_name: str | None = None,
+        segment_distances: list[float] | None = None,
     ) -> dict:
         """Rebuild the venue with a different number of gates.
+
+        ``segment_distances`` gives the walking distance from each gate to the
+        next (G1->G2, ..., Gn->G1). When omitted, the current distances are kept
+        if the gate count is unchanged; otherwise gates are spaced evenly.
 
         Gate ids are positional (``G1``..``Gn``), so growing the venue leaves
         existing gates and their staged footage untouched and adds empty ones.
@@ -602,6 +607,8 @@ class Orchestrator:
 
             # Validate the new layout before tearing anything down.
             existing_config = self.venue.config
+            if segment_distances is None and gate_count == self.venue.gate_count:
+                segment_distances = existing_config.segment_distances_m
             new_venue = build_ring_topology(
                 gate_count=gate_count,
                 default_capacity=default_capacity if default_capacity is not None else DEFAULT_CAPACITY,
@@ -610,6 +617,7 @@ class Orchestrator:
                 camera_bindings=surviving_bindings,
                 venue_id=existing_config.id,
                 venue_name=venue_name or existing_config.name,
+                segment_distances=segment_distances,
             )
 
             for camera_id in dropped_cameras:

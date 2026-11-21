@@ -30,7 +30,7 @@ export const api = {
   venueConfig: () => json<VenueConfig>('/api/venue/config'),
   decisions: () => json<Record<string, Decision>>('/api/decisions'),
 
-  configureVenue: (body: { gate_count: number; venue_name?: string }) =>
+  configureVenue: (body: { gate_count: number; venue_name?: string; segment_distances?: number[] }) =>
     json<{ gate_count: number; cameras_kept: string[]; cameras_stopped: string[] }>(
       '/api/venue/configure',
       { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },

@@ -58,6 +58,12 @@ class VenueConfig(BaseModel):
     geometry: GeometryConfig = Field(default_factory=GeometryConfig)
     gates: list[GateConfig] = Field(..., min_length=1)
     connections: list[ConnectionConfig] = Field(default_factory=list)
+    segment_distances_m: list[float] | None = Field(
+        default=None,
+        description="Walking distance in metres along the perimeter from each gate to the "
+                    "next, in position order (the last entry closes the ring back to the "
+                    "first gate). Omitted: gates are spaced evenly on the ring.",
+    )
     auto_circular_connections: bool = Field(
         default=True,
         description="Derive circular adjacency from gate ordering when no explicit "
@@ -77,6 +83,16 @@ class VenueConfig(BaseModel):
         camera_ids = [g.camera_id for g in self.gates if g.camera_id is not None]
         if len(camera_ids) != len(set(camera_ids)):
             raise ValueError(f"Duplicate camera IDs found: {camera_ids}")
+
+        if self.segment_distances_m is not None:
+            if len(self.segment_distances_m) != len(self.gates):
+                raise ValueError(
+                    f"segment_distances_m needs one distance per gate ({len(self.gates)}), "
+                    f"got {len(self.segment_distances_m)}"
+                )
+            bad = [d for d in self.segment_distances_m if not (0 < d <= 5000)]
+            if bad:
+                raise ValueError(f"Walking distances must be between 0 and 5000 m, got {bad}")
 
         for conn in self.connections:
             if conn.from_gate not in gate_ids:
@@ -99,25 +115,31 @@ class VenueConfig(BaseModel):
     def derive_circular_connections(self) -> list[ConnectionConfig]:
         """Derive ring adjacency from gate ordering.
 
-        Gates are joined in a ring by ``position_index``; each edge length is the
-        arc between neighbours on the perimeter.
+        Gates are joined in a ring by ``position_index``. Each edge is the walking
+        distance from a gate to the next: ``segment_distances_m`` when given,
+        otherwise the arc between evenly spaced gates.
         """
         sorted_gates = sorted(self.gates, key=lambda g: g.position_index)
         n = len(sorted_gates)
         if n < 2:
             return []
 
-        angle_step = 2 * math.pi / n
-        arc_length = self.geometry.radius_m * angle_step
-
+        segments = self.ring_segment_distances()
         derived: list[ConnectionConfig] = []
         for i in range(n):
             g_from = sorted_gates[i]
             g_to = sorted_gates[(i + 1) % n]
             derived.append(ConnectionConfig(
-                **{"from": g_from.gate_id, "to": g_to.gate_id, "distance_m": round(arc_length, 2)}
+                **{"from": g_from.gate_id, "to": g_to.gate_id, "distance_m": round(segments[i], 2)}
             ))
         return derived
+
+    def ring_segment_distances(self) -> list[float]:
+        """Walking distance from each gate (in position order) to the next."""
+        n = len(self.gates)
+        if self.segment_distances_m is not None:
+            return [float(d) for d in self.segment_distances_m]
+        return [self.geometry.radius_m * 2 * math.pi / n] * n if n else []
 
     def get_effective_connections(self) -> list[ConnectionConfig]:
         """Explicit connections when present, otherwise the derived ring."""

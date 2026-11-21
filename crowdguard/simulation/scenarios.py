@@ -136,6 +136,32 @@ def festival_waves() -> Scenario:
     )
 
 
+def uneven_spacing() -> Scenario:
+    """A surge where the emptiest gate is far away and a busier one is close.
+
+    Six gates, unevenly spaced: G2 is 450 m from G1, G6 only 70 m. G2 is nearly
+    empty; G6 is busier but still has room. Sending people the long way costs
+    over six minutes of walking, so a good policy weighs walk time against
+    queue time instead of just picking the emptiest gate.
+    """
+    base = np.array([1.2, 0.5, 1.2, 1.3, 1.3, 1.1])
+
+    def demand(t: float) -> np.ndarray:
+        lam = base.copy()
+        lam[0] += 1.9 * _window(t, 300, 1200)
+        return lam
+
+    return Scenario(
+        name="uneven_spacing",
+        title="Surge with uneven gate spacing",
+        description="6 gates; G1 surges; the nearly empty G2 is 450 m away, the busier "
+                    "G6 only 70 m. Segments G1->G2..G6->G1: 450, 120, 120, 120, 120, 70 m.",
+        gates=_gates(6, 1.8, 100.0),
+        demand=demand, demand_end_s=2400, max_time_s=5400,
+        segments_m=(450.0, 120.0, 120.0, 120.0, 120.0, 70.0),
+    )
+
+
 def degraded_sensing() -> Scenario:
     """The single surge with imperfect sensing: two gates have no camera, and
     the camera of G2 - the natural target - freezes for 5 minutes mid-surge."""
@@ -158,6 +184,7 @@ SCENARIOS = {
     "near_saturation": near_saturation,
     "festival_waves": festival_waves,
     "degraded_sensing": degraded_sensing,
+    "uneven_spacing": uneven_spacing,
 }
 
 

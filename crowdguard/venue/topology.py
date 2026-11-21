@@ -82,8 +82,13 @@ class VenueTopology:
                 self._adjacency[conn.from_gate].append(Edge(conn.from_gate, conn.to_gate, conn.distance_m))
             if not any(e.to_gate == conn.from_gate for e in self._adjacency[conn.to_gate]):
                 self._adjacency[conn.to_gate].append(Edge(conn.to_gate, conn.from_gate, conn.distance_m))
-            self._edge_distances[(conn.from_gate, conn.to_gate)] = conn.distance_m
-            self._edge_distances[(conn.to_gate, conn.from_gate)] = conn.distance_m
+            # Two gates can be joined twice (a 2-gate ring: once each way round).
+            # The shorter link is the one anyone would walk.
+            for key in ((conn.from_gate, conn.to_gate), (conn.to_gate, conn.from_gate)):
+                self._edge_distances[key] = min(conn.distance_m, self._edge_distances.get(key, float("inf")))
+                for edge in self._adjacency[key[0]]:
+                    if edge.to_gate == key[1] and edge.distance_m > self._edge_distances[key]:
+                        edge.distance_m = self._edge_distances[key]
 
         self._compute_all_pairs_shortest()
 
@@ -264,9 +269,9 @@ class VenueTopology:
     def perimeter_path(self, from_gate: str, to_gate: str) -> list[str]:
         """Gate sequence walking the perimeter ring from one gate to another.
 
-        Picks the shorter of the two ring directions. Used to describe and draw a
-        diversion route that stays on the outer concourse rather than crossing
-        the event grounds.
+        Picks the shorter of the two ring directions **in metres**, not in
+        number of gates: with uneven spacing, fewer gates can be further. Used to
+        describe and draw a diversion route that stays on the outer concourse.
         """
         ring = self.gate_ids
         if from_gate not in ring or to_gate not in ring:
@@ -274,10 +279,17 @@ class VenueTopology:
 
         i, j = ring.index(from_gate), ring.index(to_gate)
         n = len(ring)
+        segments = self.ring_segments_m()
 
         forward = [ring[(i + step) % n] for step in range(((j - i) % n) + 1)]
         backward = [ring[(i - step) % n] for step in range(((i - j) % n) + 1)]
-        return forward if len(forward) <= len(backward) else backward
+        forward_m = sum(segments[(i + step) % n] for step in range((j - i) % n))
+        backward_m = sum(segments[(i - step - 1) % n] for step in range((i - j) % n))
+        return forward if forward_m <= backward_m else backward
+
+    def ring_segments_m(self) -> list[float]:
+        """Walking distance from each gate (perimeter order) to the next one."""
+        return self._config.ring_segment_distances()
 
     def summary(self) -> dict:
         """Summary dictionary for logging and the dashboard."""
@@ -291,6 +303,11 @@ class VenueTopology:
             "geometry_type": self.geometry_type,
             "radius_m": self.radius_m,
             "connection_count": sum(len(v) for v in self._adjacency.values()) // 2,
+            "segments": [
+                {"from": a, "to": self.gate_ids[(k + 1) % len(self.gate_ids)], "distance_m": round(d, 1)}
+                for k, (a, d) in enumerate(zip(self.gate_ids, self.ring_segments_m()))
+            ] if len(self.gate_ids) >= 2 else [],
+            "perimeter_m": round(sum(self.ring_segments_m()), 1),
             "gates": [
                 {
                     "gate_id": g.gate_id,

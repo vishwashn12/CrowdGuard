@@ -72,6 +72,10 @@ class VenueRequest(BaseModel):
     radius_m: float | None = Field(default=None, gt=0)
     capacities: dict[str, int] | None = None
     venue_name: str | None = Field(default=None, max_length=120)
+    segment_distances: list[float] | None = Field(
+        default=None,
+        description="Walking distance in metres from each gate to the next: G1->G2, ..., Gn->G1",
+    )
 
 
 def _sanitize_filename(name: str) -> str:
@@ -233,6 +237,8 @@ def create_app(orchestrator: Orchestrator) -> FastAPI:
             "venue_name": venue.venue_name,
             "min_gates": MIN_GATES,
             "max_gates": MAX_GATES,
+            "segments": venue.summary()["segments"],
+            "perimeter_m": venue.summary()["perimeter_m"],
             "gates": [
                 {
                     "gate_id": gate_id,
@@ -268,6 +274,7 @@ def create_app(orchestrator: Orchestrator) -> FastAPI:
                 request.radius_m,
                 request.capacities,
                 request.venue_name,
+                request.segment_distances,
             )
         except SessionError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc

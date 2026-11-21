@@ -55,6 +55,7 @@ def build_ring_venue(
     camera_bindings: dict[str, str] | None = None,
     venue_id: str = "venue",
     venue_name: str = "Venue",
+    segment_distances: list[float] | None = None,
 ) -> VenueConfig:
     """Build a ring venue configuration.
 
@@ -67,6 +68,8 @@ def build_ring_venue(
         camera_bindings: gate_id -> camera_id to carry over existing feeds.
         venue_id: Identifier for the venue.
         venue_name: Display name.
+        segment_distances: Walking distance (m) from each gate to the next, in
+            order G1->G2, G2->G3, ..., Gn->G1. Omitted: evenly spaced on the ring.
 
     Raises:
         ValueError: If ``gate_count`` is outside the supported range.
@@ -117,6 +120,7 @@ def build_ring_venue(
         geometry=GeometryConfig(type="circular", radius_m=radius_m),
         gates=gates,
         auto_circular_connections=True,
+        segment_distances_m=list(segment_distances) if segment_distances is not None else None,
     )
 
 

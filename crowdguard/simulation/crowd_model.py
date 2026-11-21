@@ -115,6 +115,7 @@ class Scenario:
     radius_m: float = 120.0
     dropouts: tuple[tuple[str, float, float], ...] = ()   # (gate, start, end) camera outages
     initial_queue: tuple[float, ...] | None = None
+    segments_m: tuple[float, ...] | None = None   # walking distance gate i -> i+1; None = even ring
 
     @property
     def gate_ids(self) -> list[str]:
@@ -128,6 +129,7 @@ class Scenario:
             capacities={g.gate_id: g.capacity for g in self.gates},
             camera_bindings={g.gate_id: f"sim_{g.gate_id}" for g in self.gates if g.monitored},
             venue_name=self.title,
+            segment_distances=list(self.segments_m) if self.segments_m else None,
         ))
 
 

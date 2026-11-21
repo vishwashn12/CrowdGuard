@@ -5,13 +5,13 @@
  * Everything is in one 1000x1000 viewBox and scales to the stage. */
 import { memo } from 'react';
 import type { Gate, Snapshot } from '../lib/types';
-import { gateMode, levelVar } from '../lib/format';
+import { gateMode, levelVar, ringAngles, segmentLengths } from '../lib/format';
 
 const C = 500;      // centre
 const R = 318;      // gate ring radius
 const TAU = Math.PI * 2;
 
-const angleAt = (i: number, n: number) => (i / n) * TAU - Math.PI / 2;
+const mod = (a: number) => ((a % TAU) + TAU) % TAU;
 const pt = (a: number, r: number): [number, number] => [C + r * Math.cos(a), C + r * Math.sin(a)];
 const f = (v: number) => v.toFixed(1);
 
@@ -22,29 +22,29 @@ interface Arc {
   label: string;
 }
 
-/** Direction the route walks around the ring: +1 clockwise, -1 counter. */
-function routeDirection(src: number, dst: number, n: number, route: string[], order: string[]): 1 | -1 {
+/** Direction the route walks around the ring: +1 clockwise, -1 counter.
+ *  Taken from the engine's route; otherwise the shorter way in metres (angles
+ *  are proportional to walking distance). */
+function routeDirection(src: number, dst: number, n: number, route: string[], order: string[], angles: number[]): 1 | -1 {
   if (route.length >= 2) {
     const next = order.indexOf(route[1]);
     if (next === (src + 1) % n) return 1;
     if (next === (src - 1 + n) % n) return -1;
   }
-  const cw = (dst - src + n) % n;
-  return cw <= n / 2 ? 1 : -1;
+  return mod(angles[dst] - angles[src]) <= Math.PI ? 1 : -1;
 }
 
 function diversionArc(
-  g: Gate, order: string[], nodeR: number, lane: number,
+  g: Gate, order: string[], angles: number[], nodeR: number, lane: number,
 ): Arc | null {
   const n = order.length;
   const si = order.indexOf(g.gate_id);
   const ti = g.target_gate ? order.indexOf(g.target_gate) : -1;
   if (si < 0 || ti < 0 || si === ti) return null;
 
-  const dir = routeDirection(si, ti, n, g.route || [], order);
-  const steps = dir > 0 ? (ti - si + n) % n : (si - ti + n) % n;
-  const span = (steps / n) * TAU * dir;
-  const a0 = angleAt(si, n);
+  const dir = routeDirection(si, ti, n, g.route || [], order, angles);
+  const a0 = angles[si];
+  const span = dir > 0 ? mod(angles[ti] - a0) : -mod(a0 - angles[ti]);
   const a1 = a0 + span;
 
   const rArc = R + nodeR + 44 + lane * 26;
@@ -78,11 +78,13 @@ function VenueMapImpl({ snap, order, selected, onSelect }: Props) {
   const showNames = n <= 10;
 
   const gates = order.map((id) => snap.gates[id]).filter(Boolean);
+  const segs = segmentLengths(snap);
+  const angles = ringAngles(n, segs);
   const live = gates.filter((g) => gateMode(g, running) === 'live');
   const totalPeople = live.reduce((s, g) => s + (g.crowd_count || 0), 0);
   const diverting = running ? gates.filter((g) => g.action === 'DIVERT' && g.target_gate) : [];
   const arcs = diverting
-    .map((g, i) => diversionArc(g, order, nodeR, i % 3))
+    .map((g, i) => diversionArc(g, order, angles, nodeR, i % 3))
     .filter((a): a is Arc => a !== null);
   const anomalies = live.reduce((s, g) => s + (g.anomaly_count || 0), 0);
 
@@ -121,6 +123,13 @@ function VenueMapImpl({ snap, order, selected, onSelect }: Props) {
         return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} className={long ? 'vm-tick vm-tick-l' : 'vm-tick'} />;
       })}
 
+      {/* walking distance along each segment of the perimeter */}
+      {segs && n <= 8 && segs.map((d, i) => {
+        const a = angles[i] + mod(angles[(i + 1) % n] - angles[i]) / 2;
+        const [x, y] = pt(a, R + nodeR * 0.75 + 34);
+        return <text key={`seg-${i}`} x={x} y={y + 6} className="vm-seg">{Math.round(d)} m</text>;
+      })}
+
       {/* centre readout */}
       <g className="vm-center">
         <text x={C} y={C - 46} className="vm-kicker">{running ? 'PEOPLE IN VIEW' : snap.session.gates_with_footage ? 'READY TO START' : 'SETUP'}</text>
@@ -141,7 +150,7 @@ function VenueMapImpl({ snap, order, selected, onSelect }: Props) {
       {/* heat glow under busy gates */}
       {gates.map((g, i) => {
         if (gateMode(g, running) !== 'live' || g.congestion_level === 'LOW') return null;
-        const [x, y] = pt(angleAt(i, n), R);
+        const [x, y] = pt(angles[i], R);
         const lv = g.congestion_level.toLowerCase();
         return (
           <circle key={`glow-${g.gate_id}`} cx={x} cy={y} r={nodeR * 3.1} fill={`url(#vm-glow-${lv})`}
@@ -168,7 +177,7 @@ function VenueMapImpl({ snap, order, selected, onSelect }: Props) {
 
       {/* gates */}
       {gates.map((g, i) => {
-        const a = angleAt(i, n);
+        const a = angles[i];
         const [x, y] = pt(a, R);
         const mode = gateMode(g, running);
         const isSel = selected === g.gate_id;
@@ -224,7 +233,10 @@ function VenueMapImpl({ snap, order, selected, onSelect }: Props) {
 export const VenueMap = memo(VenueMapImpl);
 
 /** Small static ring for the setup screen: shows the layout being chosen. */
-export function RingPreview({ count, monitored }: { count: number; monitored: Set<string> }) {
+export function RingPreview({ count, monitored, segments }: {
+  count: number; monitored: Set<string>; segments?: number[];
+}) {
+  const angles = ringAngles(count, segments);
   const nodeR = count <= 6 ? 56 : count <= 10 ? 46 : count <= 16 ? 34 : 26;
   return (
     <svg viewBox="0 0 1000 1000" className="ring-preview" aria-label={`${count}-gate ring`}>
@@ -240,7 +252,7 @@ export function RingPreview({ count, monitored }: { count: number; monitored: Se
       <text x={C} y={C + 96} className="vm-sub" style={{ fontSize: 40 }}>gates</text>
       {Array.from({ length: count }, (_, i) => {
         const id = `G${i + 1}`;
-        const [x, y] = pt(angleAt(i, count), R);
+        const [x, y] = pt(angles[i], R);
         const on = monitored.has(id);
         return (
           <g key={id}>

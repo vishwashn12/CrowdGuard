@@ -72,7 +72,7 @@ SWEEP_LABELS = {
     "actuation_delay_s": "Delay before an instruction reaches the crowd (s)",
     "count_noise": "Crowd-count error (relative s.d.)",
 }
-SWEEP_SCENARIOS = ["single_surge", "twin_surge", "stadium_entry"]
+SWEEP_SCENARIOS = ["single_surge", "twin_surge", "stadium_entry", "uneven_spacing"]
 
 
 def write_csv(path: Path, rows: list[dict]) -> None:
@@ -145,7 +145,7 @@ def fig_sweep(rows: list[dict], param: str, policies: list[str], metric: str, ou
     plt = _style()
     k = SCALE.get(metric, 1)
     controlled = [p for p in policies if p != "no_control"]
-    fig, axes = plt.subplots(1, len(SWEEP_SCENARIOS), figsize=(12, 4.2), sharey=False)
+    fig, axes = plt.subplots(1, len(SWEEP_SCENARIOS), figsize=(4 * len(SWEEP_SCENARIOS), 4.2), sharey=False)
     for ax, sc in zip(axes, SWEEP_SCENARIOS):
         base = [r[metric] for r in rows if r["scenario"] == sc and r["policy"] == "no_control"]
         for p in controlled:
