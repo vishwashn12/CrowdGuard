@@ -56,6 +56,7 @@ from crowdguard.config.schemas import AppConfig, CameraConfig
 from crowdguard.decision.config import DecisionConfig
 from crowdguard.decision.contracts import CrowdState, DecisionResult
 from crowdguard.decision.engine import DecisionEngine
+from crowdguard.decision.engine_v2 import DecisionEngineV2
 from crowdguard.decision.fusion import calibrated_capacity
 from crowdguard.decision.trend import TrendTracker
 from crowdguard.display.renderer import PlaybackRenderer
@@ -149,7 +150,7 @@ class Orchestrator:
         self.synchronizer = TemporalSynchronizer(stale_frame_gap=stale_frame_gap)
         self.adapter = FusionAdapter(self.decision_config)
         self.trends = TrendTracker(self.decision_config)
-        self.engine = DecisionEngine(self.venue, self.decision_config)
+        self.engine = self._make_engine(self.venue)
         self.alerts = AlertStore(log_path=alert_log_path)
         self.commands = CommandBoard()
         self.calibrations = CalibrationStore(Path(config.uploads.directory) / "calibrations.json")
@@ -216,6 +217,11 @@ class Orchestrator:
     def latest_decisions(self) -> dict[str, DecisionResult]:
         with self._results_lock:
             return dict(self._latest_decisions)
+
+    def _make_engine(self, venue: VenueTopology) -> DecisionEngine:
+        if self.config.decision_engine == "v2":
+            return DecisionEngineV2(venue, self.decision_config)
+        return DecisionEngine(venue, self.decision_config)
 
     def _require_setup(self) -> None:
         if self._session_running:
@@ -625,7 +631,7 @@ class Orchestrator:
 
             self.venue = new_venue
             self.cameras.set_venue(new_venue)
-            self.engine = DecisionEngine(new_venue, self.decision_config)
+            self.engine = self._make_engine(new_venue)
             self.trends.reset()
             with self._results_lock:
                 self._latest_states = {}

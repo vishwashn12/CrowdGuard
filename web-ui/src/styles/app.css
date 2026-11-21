@@ -704,3 +704,4 @@ input[type='number'], .field input, .chip-custom input {
 .link-btn { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font-size: 12.5px; }
 .link-btn:disabled { color: var(--ink-4); cursor: not-allowed; }
 .vm-seg { font-family: var(--mono) !important; font-size: 15px; font-weight: 600; fill: var(--ink-3); text-anchor: middle; }
+.share { font-family: var(--mono); font-weight: 800; padding: 0 6px; border-radius: 6px; background: var(--accent-soft); color: #9fd2ff; }

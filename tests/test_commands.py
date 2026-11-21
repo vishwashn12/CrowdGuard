@@ -19,12 +19,13 @@ from crowdguard.decision.contracts import (
 ALLOWED_VERBS = {"STOP_ENTRY", "HOLD_OUTSIDE", "DIVERT", "GET_READY", "SEND_STAFF"}
 
 
-def decision(gate, action, target=None, severity=CongestionLevel.HIGH):
+def decision(gate, action, target=None, severity=CongestionLevel.HIGH, fraction=None, codes=()):
     cands = ()
     if target:
         cands = (CandidateEvaluation(target, 94.2, CongestionLevel.LOW, 0.2, 0.3, Trend.STABLE, 0.8, True),)
     return DecisionResult(decision_id="d", timestamp=time.time(), source_gate_id=gate, action=action,
-                          target_gate_id=target, severity=severity, candidate_evaluations=cands)
+                          target_gate_id=target, severity=severity, candidate_evaluations=cands,
+                          divert_fraction=fraction, reason_codes=codes)
 
 
 def alert(rule, gate, severity=Severity.WARNING, category=AlertCategory.CONGESTION, **detail):
@@ -43,7 +44,7 @@ def test_divert_becomes_a_short_command():
     c = commands[0].to_dict()
     assert c["verb"] == "DIVERT" and c["target"] == "G3"
     assert c["headline"] == "Divert G1 → G3"
-    assert c["radio"] == "G1 team: send new arrivals to G3 by the outer path."
+    assert c["radio"] == "G1 team: send all new arrivals to G3 by the outer path."
     assert "94 m walk" in c["detail"]
 
 
@@ -130,3 +131,24 @@ def test_engine_and_board_agree_end_to_end():
     commands, _ = CommandBoard().build(decisions, [], states, {g: 500 for g in states}, time.time())
     assert len(commands) == 1
     assert commands[0].target == decisions["G1"].target_gate_id
+
+
+def test_share_appears_in_headline_and_radio():
+    commands, _ = build({"G1": decision("G1", ActionType.DIVERT, "G3", fraction=0.5)})
+    c = commands[0]
+    assert c.headline == "Divert G1 → G3 · 50%"
+    assert c.radio == "G1 team: send half of new arrivals to G3 by the outer path."
+    full, _ = build({"G1": decision("G1", ActionType.DIVERT, "G3", fraction=1.0)})
+    assert full[0].headline == "Divert G1 → G3"
+
+
+def test_forecast_and_held_diversions_say_why():
+    early, _ = build({"G1": decision("G1", ActionType.DIVERT, "G3", codes=("FORECAST_HIGH",))})
+    held, _ = build({"G1": decision("G1", ActionType.DIVERT, "G3", codes=("DIVERSION_HELD",))})
+    assert early[0].reason == "filling fast" and held[0].reason == "still clearing"
+
+
+def test_live_system_can_run_engine_v2():
+    from crowdguard.config.schemas import AppConfig
+    assert AppConfig(decision_engine="v2").decision_engine == "v2"
+    assert AppConfig().decision_engine == "v1"

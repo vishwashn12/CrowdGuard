@@ -77,11 +77,16 @@ class Instruction:
     target: str | None = None
     kind: str | None = None
     since: float = 0.0
+    share: float | None = None     # share of arrivals to divert; None = everyone
 
     @property
     def headline(self) -> str:
         head = f"{VERB_LABEL[self.verb]} {self.gate_id}"
-        return f"{head} → {self.target}" if self.target else head
+        if self.target:
+            head += f" → {self.target}"
+        if self.verb == "DIVERT" and self.share is not None and self.share < 1:
+            head += f" · {self.share:.0%}"
+        return head
 
     def to_dict(self) -> dict:
         return {
@@ -97,6 +102,7 @@ class Instruction:
             "detail": self.detail,
             "radio": self.radio,
             "since": self.since,
+            "share": self.share,
         }
 
 
@@ -129,14 +135,24 @@ def _target_line(target: str | None, states: dict[str, CrowdState], decision: De
     return f" · {target}: {load}{walk}"
 
 
-def _radio(verb: str, gate: str, target: str | None, kind: str | None = None) -> str:
+_SHARE_WORDS = {1.0: "all", 0.75: "three in four", 0.5: "half of", 0.25: "one in four of"}
+
+
+def _share_words(share: float | None) -> str:
+    if share is None:
+        return "all"
+    return _SHARE_WORDS.get(round(share, 2), f"{share:.0%} of")
+
+
+def _radio(verb: str, gate: str, target: str | None, kind: str | None = None, share: float | None = None) -> str:
     if verb == "STOP_ENTRY":
         s = f"{gate} team: stop entry now. Open barriers and make space."
         return s + (f" Send new arrivals to {target}." if target else "")
     if verb == "HOLD_OUTSIDE":
         return f"{gate} team: hold new arrivals outside. Let the queue clear."
     if verb == "DIVERT":
-        return f"{gate} team: send new arrivals to {target} by the outer path."
+        who = _share_words(share)
+        return f"{gate} team: send {who} new arrivals to {target} by the outer path."
     if verb == "GET_READY":
         return f"{gate} team: stand by to divert. Check the route{' to ' + target if target else ''} is clear."
     if kind == "person_down":
@@ -180,7 +196,14 @@ class CommandBoard:
         for gate, d in decisions.items():
             if d.action is ActionType.DIVERT and d.target_gate_id:
                 level = "critical" if d.severity is CongestionLevel.CRITICAL else "high"
-                reason = "critical crowding" if d.severity is CongestionLevel.CRITICAL else "crowding"
+                if "FORECAST_HIGH" in d.reason_codes:
+                    reason = "filling fast"
+                elif "DIVERSION_HELD" in d.reason_codes:
+                    reason = "still clearing"
+                elif d.severity is CongestionLevel.CRITICAL:
+                    reason = "critical crowding"
+                else:
+                    reason = "crowding"
                 candidates.setdefault(gate, []).append(("DIVERT", level, reason))
             elif d.action is ActionType.RESTRICT_INFLOW:
                 candidates.setdefault(gate, []).append(("HOLD_OUTSIDE", "critical", "no free gate"))
@@ -217,13 +240,15 @@ class CommandBoard:
             if decision is not None and decision.action is ActionType.DIVERT and verb in (
                     "STOP_ENTRY", "DIVERT", "GET_READY"):
                 target = decision.target_gate_id
-            key = ("command", gate, verb, target)
+            share = decision.divert_fraction if (decision is not None and verb == "DIVERT") else None
+            key = ("command", gate, verb, target, share)
             commands.append(Instruction(
                 channel="command", verb=verb, gate_id=gate, level=level, reason=reason, target=target,
                 detail=_load_line(gate, states.get(gate), capacities.get(gate))
                 + _target_line(target, states, decision),
-                radio=_radio(verb, gate, target),
+                radio=_radio(verb, gate, target, share=share),
                 since=self._since(key, now, live),
+                share=share,
             ))
 
         # forget instructions that are no longer in force

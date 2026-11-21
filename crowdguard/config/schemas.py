@@ -281,6 +281,12 @@ class AppConfig(BaseModel):
     display: DisplayConfig = Field(default_factory=DisplayConfig)
     uploads: UploadConfig = Field(default_factory=UploadConfig)
     venue_config: str = Field(default="config/venue/circular_venue.yaml")
+    decision_engine: Literal["v1", "v2"] = Field(
+        default="v1",
+        description="Which decision engine drives live recommendations. v2 adds steady "
+                    "diversions, venue-wide coordination, stale-target checks and a short "
+                    "forecast (docs/14).",
+    )
 
     @model_validator(mode="after")
     def validate_unique_camera_ids(self) -> "AppConfig":

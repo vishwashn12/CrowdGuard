@@ -52,6 +52,9 @@ export function InstructionText({ item }: { item: Instruction }) {
       <span className="verb">{item.verb_label}</span>{' '}
       <span className="where">{item.gate_id}</span>
       {item.target && <> <span className="arrow">→</span> <span className="where">{item.target}</span></>}
+      {item.verb === 'DIVERT' && item.share != null && item.share < 1 && (
+        <> <span className="share">{Math.round(item.share * 100)}%</span></>
+      )}
     </>
   );
 }

@@ -23,6 +23,8 @@ export interface Instruction {
   detail: string;
   radio: string;
   since: number;
+  /** Share of arrivals to divert (DIVERT only); null or 1 = everyone. */
+  share?: number | null;
 }
 
 export interface LogEntry {
@@ -86,6 +88,7 @@ export interface Gate {
   action: string;
   severity: string;
   target_gate: string | null;
+  divert_fraction?: number | null;
   reason: string;
   route: string[];
 

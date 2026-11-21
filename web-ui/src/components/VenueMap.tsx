@@ -60,7 +60,7 @@ function diversionArc(
     key: `${g.gate_id}-${g.target_gate}`,
     d: `M ${f(x0)} ${f(y0)} L ${f(x1)} ${f(y1)} A ${rArc} ${rArc} 0 ${large} ${sweep} ${f(x2)} ${f(y2)} L ${f(x3)} ${f(y3)}`,
     labelAt: pt(a0 + span / 2, rArc + 30),
-    label: `${g.gate_id} → ${g.target_gate}`,
+    label: `${g.gate_id} → ${g.target_gate}${g.command?.share != null && g.command.share < 1 ? ` ${Math.round(g.command.share * 100)}%` : ''}`,
   };
 }
 
@@ -169,7 +169,7 @@ function VenueMapImpl({ snap, order, selected, onSelect }: Props) {
             </circle>
           ))}
           <g transform={`translate(${f(arc.labelAt[0])}, ${f(arc.labelAt[1])})`}>
-            <rect x={-62} y={-19} width={124} height={38} rx={19} className="vm-arc-label-bg" />
+            <rect x={-arc.label.length * 6.2 - 14} y={-19} width={arc.label.length * 12.4 + 28} height={38} rx={19} className="vm-arc-label-bg" />
             <text y={7} className="vm-arc-label">{arc.label}</text>
           </g>
         </g>
