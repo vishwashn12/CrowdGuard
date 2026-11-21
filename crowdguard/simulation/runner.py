@@ -15,7 +15,8 @@ from dataclasses import asdict, replace
 import numpy as np
 
 from crowdguard.simulation.crowd_model import SimConfig, Simulation
-from crowdguard.simulation.policies import POLICIES
+from crowdguard.decision.engine_v2 import V2Config, V2Features
+from crowdguard.simulation.policies import POLICIES, EngineV2
 from crowdguard.simulation.scenarios import get_scenario
 
 METRICS = (
@@ -24,10 +25,25 @@ METRICS = (
 )
 
 
+def make_policy(name: str):
+    """A registered policy, or ``v2_no_<feature>``: engine v2 with one improvement off."""
+    if name.startswith("v2_no_"):
+        feature = name[len("v2_no_"):]
+        if feature not in V2Features.model_fields:
+            raise KeyError(f"unknown v2 feature {feature!r}")
+        return EngineV2(name=name, v2_config=V2Config(features=V2Features(**{feature: False})))
+    return POLICIES[name]()
+
+
+def v2_ablation_names() -> list[str]:
+    """One ablation variant per v2 improvement that is switched on by default."""
+    return [f"v2_no_{f}" for f, field in V2Features.model_fields.items() if field.default]
+
+
 def run_one(job: tuple[str, str, int, dict]) -> dict:
     scenario, policy, seed, overrides = job
     cfg = replace(SimConfig(seed=seed), **overrides)
-    result = Simulation(get_scenario(scenario), cfg).run(POLICIES[policy]())
+    result = Simulation(get_scenario(scenario), cfg).run(make_policy(policy))
     return {"scenario": scenario, "policy": policy, "seed": seed, **overrides, **result.metrics}
 
 
@@ -37,9 +53,10 @@ def run_grid(
     seeds: int,
     overrides: dict | None = None,
     processes: int | None = None,
+    seed_offset: int = 0,
 ) -> list[dict]:
     overrides = overrides or {}
-    jobs = [(s, p, k, overrides) for s in scenarios for p in policies for k in range(seeds)]
+    jobs = [(s, p, seed_offset + k, overrides) for s in scenarios for p in policies for k in range(seeds)]
     processes = processes or max(1, (os.cpu_count() or 2) // 2)
     if processes == 1:
         return [run_one(j) for j in jobs]

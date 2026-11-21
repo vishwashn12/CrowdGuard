@@ -33,7 +33,7 @@ import numpy as np
 from crowdguard.simulation.crowd_model import DANGER_DENSITY, SimConfig, Simulation
 from crowdguard.simulation.policies import POLICIES, POLICY_LABELS
 from crowdguard.simulation.runner import (
-    METRICS, config_dict, mean_ci, paired_change, run_grid, summarise,
+    METRICS, config_dict, make_policy, mean_ci, paired_change, run_grid, summarise, v2_ablation_names,
 )
 from crowdguard.simulation.scenarios import SCENARIOS, get_scenario
 
@@ -73,6 +73,15 @@ SWEEP_LABELS = {
     "count_noise": "Crowd-count error (relative s.d.)",
 }
 SWEEP_SCENARIOS = ["single_surge", "twin_surge", "stadium_entry", "uneven_spacing"]
+# Ablation: v2 with one improvement off, at default settings and under the two
+# stresses that separate the variants most (slow instructions, low compliance).
+ABLATION_SETTINGS = {"default": {}, "delay 180 s": {"actuation_delay_s": 180.0}, "compliance 40%": {"compliance": 0.4}}
+FEATURE_LABELS = {
+    "steady_diversion": "steady diversion",
+    "coordination": "venue-wide coordination",
+    "fresh_targets": "ignore stale targets",
+    "forecast": "forecast",
+}
 
 
 def write_csv(path: Path, rows: list[dict]) -> None:
@@ -179,7 +188,7 @@ def fig_timeseries(policies: list[str], out: Path, scenario: str = "single_surge
     sc = get_scenario(scenario)
     fig, axes = plt.subplots(1, len(policies), figsize=(4 * len(policies), 3.6), sharey=True)
     for ax, p in zip(np.atleast_1d(axes), policies):
-        res = Simulation(sc, SimConfig(seed=seed)).run(POLICIES[p](), record=True)
+        res = Simulation(sc, SimConfig(seed=seed)).run(make_policy(p), record=True)
         t = res.series["t"] / 60
         area = np.array([g.area_m2 for g in sc.gates])
         dens = np.minimum(res.series["queue"] / area, 9.0)
@@ -254,6 +263,32 @@ def markdown(summary, rows, policies, scenarios, sweeps, info) -> str:
     return "\n".join(out)
 
 
+def ablation_markdown(rows: list[dict], variants: list[str], scenarios: list[str]) -> str:
+    """Ablation table: what each v2 improvement contributes, summed over scenarios."""
+    def label(v):
+        return "**v2 (all on)**" if v == "engine_v2" else "without " + FEATURE_LABELS.get(v[6:], v[6:])
+
+    out = ["", "## Ablation: engine v2 with one improvement switched off", "",
+           "Totals over the scenarios in each setting (mean per run, summed over scenarios); "
+           "danger in person-minutes at >= 5 people/m^2. Higher than 'all on' means the improvement helps.", ""]
+    for setting in ABLATION_SETTINGS:
+        srows = [r for r in rows if r["setting"] == setting]
+        scs = sorted({r["scenario"] for r in srows})
+        out += [f"### {setting} ({len(scs)} scenarios)", "",
+                "| Variant | Danger (person-min) | 95th-pct wait (s, mean over scenarios) | Instruction changes/h (mean) |",
+                "| :--- | ---: | ---: | ---: |"]
+        for v in variants:
+            vr = [r for r in srows if r["policy"] == v]
+            if not vr:
+                continue
+            danger = sum(np.mean([r["danger_person_s"] for r in vr if r["scenario"] == s]) for s in scs) / 60
+            p95 = np.mean([np.mean([r["p95_wait_s"] for r in vr if r["scenario"] == s]) for s in scs])
+            sw = np.mean([np.mean([r["switches_per_hour"] for r in vr if r["scenario"] == s]) for s in scs])
+            out.append(f"| {label(v)} | {danger:,.0f} | {p95:.0f} | {sw:.0f} |")
+        out.append("")
+    return "\n".join(out)
+
+
 def git_commit() -> str | None:
     try:
         return subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, capture_output=True,
@@ -272,6 +307,11 @@ def main() -> None:
     ap.add_argument("--policies", default="no_control,nearest_gate,engine_v1,informed")
     ap.add_argument("--scenarios", default=",".join(SCENARIOS))
     ap.add_argument("--processes", type=int, default=None)
+    ap.add_argument("--seed-offset", type=int, default=0,
+                    help="first seed; use seeds never used while tuning (e.g. 1000) for final results")
+    ap.add_argument("--ablation", action="store_true",
+                    help="also run engine v2 with each improvement switched off")
+    ap.add_argument("--ablation-seeds", type=int, default=50)
     ap.add_argument("--out", default=str(ROOT / "reports" / "decision_eval"))
     args = ap.parse_args()
 
@@ -284,7 +324,7 @@ def main() -> None:
 
     t0 = time.time()
     print(f"main grid: {len(scenarios)} scenarios x {len(policies)} policies x {seeds} seeds")
-    rows = run_grid(scenarios, policies, seeds, processes=args.processes)
+    rows = run_grid(scenarios, policies, seeds, processes=args.processes, seed_offset=args.seed_offset)
     write_csv(out / "main_runs.csv", rows)
     summary = summarise(rows)
     write_csv(out / "summary.csv", summary)
@@ -295,9 +335,24 @@ def main() -> None:
             print(f"sweep {param}: {values}")
             srows: list[dict] = []
             for v in values:
-                srows += run_grid(SWEEP_SCENARIOS, policies, sweep_seeds, overrides={param: v}, processes=args.processes)
+                srows += run_grid(SWEEP_SCENARIOS, policies, sweep_seeds, overrides={param: v},
+                                  processes=args.processes, seed_offset=args.seed_offset)
             sweeps[param] = srows
             write_csv(out / f"sens_{param}.csv", srows)
+
+    ablation_md = ""
+    if args.ablation:
+        variants = ["engine_v2"] + v2_ablation_names()
+        arows: list[dict] = []
+        for label, ov in ABLATION_SETTINGS.items():
+            print(f"ablation: {label}")
+            scs = scenarios if not ov else SWEEP_SCENARIOS
+            for r in run_grid(scs, variants, args.ablation_seeds, overrides=ov, processes=args.processes,
+                              seed_offset=args.seed_offset):
+                r["setting"] = label
+                arows.append(r)
+        write_csv(out / "ablation_runs.csv", arows)
+        ablation_md = ablation_markdown(arows, variants, scenarios)
 
     print("figures")
     for m in ("peak_density", "danger_person_s", "p95_wait_s", "switches_per_hour"):
@@ -309,12 +364,14 @@ def main() -> None:
 
     info = {
         "label": args.label, "seeds": seeds, "sweep_seeds": sweep_seeds, "policies": policies,
+        "seed_offset": args.seed_offset, "ablation": args.ablation,
         "scenarios": scenarios, "sim_config": config_dict(), "sweeps": SWEEPS,
         "generated": time.strftime("%Y-%m-%d %H:%M"), "runtime_s": round(time.time() - t0, 1),
         "git_commit": git_commit(), "python": platform.python_version(), "numpy": np.__version__,
     }
     (out / "run_info.json").write_text(json.dumps(info, indent=2), encoding="utf-8")
-    (out / "summary.md").write_text(markdown(summary, rows, policies, scenarios, sweeps, info), encoding="utf-8")
+    (out / "summary.md").write_text(markdown(summary, rows, policies, scenarios, sweeps, info) + ablation_md,
+                                    encoding="utf-8")
     print(f"done in {info['runtime_s']} s -> {out}")
 
 

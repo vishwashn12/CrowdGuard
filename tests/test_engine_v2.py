@@ -125,3 +125,31 @@ class TestV2Ablation:
             a, b = sweep(off, ring(8, counts)), sweep(v1, ring(8, counts))
             assert {g: (d.action, d.target_gate_id) for g, d in a.items()} == \
                    {g: (d.action, d.target_gate_id) for g, d in b.items()}
+
+
+class TestV2FreshTargetsAndForecast:
+    def test_k3_stale_target_not_chosen(self):
+        engine, _ = new_v2()
+        states = ring(8, {"G1": 470, "G8": 200})
+        states[1] = S.st("G2", 20, age=30.0)
+        assert sweep(engine, states)["G1"].target_gate_id != "G2"
+
+    def test_forecast_starts_a_diversion_before_high(self):
+        engine, clock = new_v2()
+        first_divert = None
+        for k in range(60):                       # a MODERATE gate rising steadily
+            g1 = 230 + 3 * k                      # score crosses HIGH (331) around k=34
+            d = sweep(engine, ring(8, {"G1": g1}))["G1"]
+            if d.action is ActionType.DIVERT and first_divert is None:
+                first_divert = (k, d.reason_codes)
+            clock.advance(1.0)
+        assert first_divert is not None
+        k, codes = first_divert
+        assert k < 34 and "FORECAST_HIGH" in codes
+
+    def test_no_forecast_for_a_flat_moderate_gate(self):
+        engine, clock = new_v2()
+        for _ in range(60):
+            d = sweep(engine, ring(8, {"G1": 300}))["G1"]
+            clock.advance(1.0)
+        assert d.action is not ActionType.DIVERT

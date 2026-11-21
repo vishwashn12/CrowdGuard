@@ -136,6 +136,33 @@ def festival_waves() -> Scenario:
     )
 
 
+def frozen_target() -> Scenario:
+    """The natural target's camera freezes while that gate fills up.
+
+    G1 surges; G2 next door starts empty, so it is the obvious target. From
+    minute 9 to 19 G2's camera freezes, and from minute 10 G2 gets its own
+    surge. A policy that trusts the frozen reading keeps sending G1's crowd
+    into a filling gate.
+    """
+    base = np.array([1.2, 0.6, 1.2, 1.2, 1.2, 1.2, 1.2, 1.2])
+
+    def demand(t: float) -> np.ndarray:
+        lam = base.copy()
+        lam[0] += 1.9 * _window(t, 300, 1200)
+        lam[1] += 1.2 * _window(t, 600, 1140)
+        return lam
+
+    return Scenario(
+        name="frozen_target",
+        title="Frozen camera on a filling target",
+        description="G1 surges; G2, the obvious target, has its own surge from min 10 "
+                    "while its camera is frozen from min 9 to 19.",
+        gates=_gates(8, 1.8, 100.0),
+        demand=demand, demand_end_s=2400, max_time_s=5400,
+        dropouts=(("G2", 540.0, 1140.0),),
+    )
+
+
 def uneven_spacing() -> Scenario:
     """A surge where the emptiest gate is far away and a busier one is close.
 
@@ -185,6 +212,7 @@ SCENARIOS = {
     "festival_waves": festival_waves,
     "degraded_sensing": degraded_sensing,
     "uneven_spacing": uneven_spacing,
+    "frozen_target": frozen_target,
 }
 
 
