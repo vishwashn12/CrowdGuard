@@ -48,17 +48,17 @@ cameras:
     enabled: true
 
   - camera_id: cam_g2
-    name: North-East Gate feed
+    name: South-East Gate feed
     source_type: video
     source: ../crowd_management/video samples/5.mp4
     gate_id: G2
     enabled: true
 
-  - camera_id: cam_g4
-    name: South Gate feed
+  - camera_id: cam_g3
+    name: South-West Gate feed
     source_type: video
     source: ../crowd_management/video samples/3.mp4
-    gate_id: G4
+    gate_id: G3
     enabled: true
 
 models:

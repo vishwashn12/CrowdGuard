@@ -1,4 +1,4 @@
-# Circular venue, six gates on a perimeter ring.
+# Circular venue, three gates on a perimeter ring (the default layout).
 #
 # No gate declares a camera_id here. Gates start unmonitored and an operator
 # binds footage to them at runtime by uploading to /api/gates/<gate_id>/upload.
@@ -7,9 +7,16 @@
 # DecisionConfig.assumed_unmonitored_utilization and penalised relative to a
 # gate we can actually see.
 #
+# Gate names match what the setup screen gives a 3-gate venue, so pressing
+# Apply with 3 gates does not rename anything. The gate count can be changed
+# live (2-12) from the setup screen.
+#
 # auto_circular_connections derives the ring from position_index, so every
 # diversion route runs along the outer concourse rather than across the event
-# grounds. With radius 120 m and six gates, each arc is about 126 m.
+# grounds. With radius 120 m and three gates, each arc is about 251 m.
+#
+# Capacity 300 applies until a gate's camera is calibrated; a calibrated gate's
+# capacity comes from its measured ground zone instead.
 
 venue:
   id: demo_venue
@@ -28,26 +35,11 @@ venue:
       position_index: 0
 
     - gate_id: G2
-      name: North-East Gate
+      name: South-East Gate
       capacity: 300
       position_index: 1
 
     - gate_id: G3
-      name: South-East Gate
-      capacity: 300
-      position_index: 2
-
-    - gate_id: G4
-      name: South Gate
-      capacity: 300
-      position_index: 3
-
-    - gate_id: G5
       name: South-West Gate
       capacity: 300
-      position_index: 4
-
-    - gate_id: G6
-      name: North-West Gate
-      capacity: 300
-      position_index: 5
+      position_index: 2

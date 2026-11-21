@@ -10,7 +10,7 @@ Sources:
 ## Venue model
 
 - **Gates on a ring.** N gates (user-chosen, 2 to 24) sit on a circle of radius R (default 120 m). Neighbouring gates are connected with edge length equal to the arc $2\pi R / N$. All-pairs shortest paths are computed with Floyd–Warshall.
-- **Capacity per gate.** Default 500. The demo layout `circular_venue.yaml` uses 500/600/550/500/450/650. **These are placeholders** and must be set from observed occupancy.
+- **Capacity per gate.** Default 300 for a gate whose camera is not calibrated (the default layout `circular_venue.yaml` has 3 gates at 300). A calibrated gate's capacity is its ground-zone area × 5 people/m²; see [13](13_instructions_and_calibration.md). *(Earlier versions used 500 and a 6-gate layout with placeholder capacities 450–650.)*
 - **Monitoring is optional.** A gate may have a camera bound or none. Unmonitored gates stay in the graph as diversion *targets* only.
 
 ## Per-gate state (fusion)
