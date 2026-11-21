@@ -283,6 +283,7 @@ class DecisionEngine:
         reason: str = "",
         candidates: tuple[CandidateEvaluation, ...] = (),
         route: tuple[str, ...] = (),
+        divert_fraction: float | None = None,
     ) -> DecisionResult:
         return DecisionResult(
             decision_id=DecisionResult.generate_id(),
@@ -296,6 +297,7 @@ class DecisionEngine:
             human_readable_reason=reason,
             candidate_evaluations=candidates,
             route=route,
+            divert_fraction=divert_fraction,
         )
 
     def reset_hysteresis(self, gate_id: str | None = None) -> None:

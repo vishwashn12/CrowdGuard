@@ -223,6 +223,9 @@ class DecisionResult:
     human_readable_reason: str = ""
     candidate_evaluations: tuple[CandidateEvaluation, ...] = ()
     route: tuple[str, ...] = ()
+    # Share of arriving people to send to the target, in (0, 1]. None means
+    # "everyone" (engine v1 does not size its diversions).
+    divert_fraction: float | None = None
 
     def __post_init__(self) -> None:
         if not self.source_gate_id:
@@ -248,6 +251,7 @@ class DecisionResult:
             "reason_codes": list(self.reason_codes),
             "reason": self.human_readable_reason,
             "route": list(self.route),
+            "divert_fraction": self.divert_fraction,
             "candidates": [
                 {
                     "gate_id": c.gate_id,

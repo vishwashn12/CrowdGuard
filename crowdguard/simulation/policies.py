@@ -23,6 +23,7 @@ from typing import Callable
 from crowdguard.decision.config import DecisionConfig
 from crowdguard.decision.contracts import ActionType, CrowdState, level_at_least
 from crowdguard.decision.engine import DecisionEngine
+from crowdguard.decision.engine_v2 import DecisionEngineV2, V2Config, V2Features
 from crowdguard.simulation.crowd_model import (
     DANGER_DENSITY,
     WALK_SPEED_MS,
@@ -87,6 +88,37 @@ class EngineV1:
         return out
 
 
+class EngineV2:
+    """Engine v2 with a chosen set of improvements (all on by default)."""
+
+    def __init__(self, name: str = "engine_v2", config: DecisionConfig | None = None,
+                 v2_config: V2Config | None = None) -> None:
+        self.name = name
+        self.config = config or DecisionConfig()
+        self.v2_config = v2_config or V2Config()
+
+    def reset(self, venue: VenueTopology, clock: Callable[[], float]) -> None:
+        self.engine = DecisionEngineV2(venue, self.config, clock=clock, v2_config=self.v2_config)
+
+    def decide(self, t, states: dict[str, CrowdState], truth: Truth) -> dict[str, Directive]:
+        out: dict[str, Directive] = {}
+        for d in self.engine.evaluate(states):
+            if d.action is ActionType.DIVERT:
+                out[d.source_gate_id] = Directive("divert", d.target_gate_id, d.divert_fraction or 1.0)
+            elif d.action is ActionType.RESTRICT_INFLOW:
+                out[d.source_gate_id] = Directive("restrict")
+        return out
+
+
+def v2_variant(**features_off: bool) -> Callable[[], EngineV2]:
+    """Factory for v2 with some features switched off (ablation)."""
+    def make() -> EngineV2:
+        feats = V2Features(**{k: False for k in features_off})
+        name = "v2_no_" + "_".join(features_off) if features_off else "engine_v2"
+        return EngineV2(name=name, v2_config=V2Config(features=feats))
+    return make
+
+
 class Informed:
     """Perfect-information balancer: a reference point, not a deployable rule."""
 
@@ -122,6 +154,7 @@ POLICIES: dict[str, Callable[[], object]] = {
     "no_control": NoControl,
     "nearest_gate": NearestGate,
     "engine_v1": EngineV1,
+    "engine_v2": EngineV2,
     "informed": Informed,
 }
 
@@ -129,5 +162,6 @@ POLICY_LABELS = {
     "no_control": "No control",
     "nearest_gate": "Nearest free gate",
     "engine_v1": "CrowdGuard engine v1",
+    "engine_v2": "CrowdGuard engine v2",
     "informed": "Shortest-wait (perfect info)",
 }

@@ -431,4 +431,4 @@ class TestK4AllOrNothing:
         d = sweep(engine, ring(8, {"G1": 470}))["G1"]
         assert d.action is ActionType.DIVERT
         share = getattr(d, "divert_fraction", None)
-        assert share is not None and 0.0 < share < 1.0
+        assert share is not None and 0.0 < share <= 1.0

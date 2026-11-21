@@ -246,7 +246,7 @@ class Simulation:
         last_obs: dict[str, tuple[float, float, float]] = {}      # gate -> (count, velocity_px, t_obs)
         directives: dict[str, Directive] = {g: Directive() for g in ids}   # in force on the ground
         pending: deque = deque()                                            # (t_effective, gate, Directive)
-        last_key: dict[str, tuple] = {g: ("none", None) for g in ids}
+        last_key: dict[str, tuple] = {g: ("none", None, None) for g in ids}
 
         policy.reset(self.venue, self.clock)
 
@@ -304,7 +304,9 @@ class Simulation:
                 new = policy.decide(t, states, truth)
                 for g in ids:
                     d = new.get(g, Directive())
-                    key = (d.action, d.target if d.action == "divert" else None)
+                    # a different target or a different share is a new instruction
+                    key = (d.action, d.target if d.action == "divert" else None,
+                           round(d.share, 2) if d.action == "divert" else None)
                     if key != last_key[g] and not (key[0] == "none" and last_key[g][0] == "none"):
                         switches += 1
                         events.append((t, g, f"{d.action}->{d.target}" if d.action == "divert" else d.action))
