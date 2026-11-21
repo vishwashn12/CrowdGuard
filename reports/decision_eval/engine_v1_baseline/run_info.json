@@ -1,0 +1,59 @@
+{
+  "label": "engine_v1_baseline",
+  "seeds": 100,
+  "sweep_seeds": 50,
+  "policies": [
+    "no_control",
+    "nearest_gate",
+    "engine_v1",
+    "informed"
+  ],
+  "scenarios": [
+    "single_surge",
+    "stadium_entry",
+    "twin_surge",
+    "near_saturation",
+    "festival_waves",
+    "degraded_sensing",
+    "uneven_spacing"
+  ],
+  "sim_config": {
+    "dt": 1.0,
+    "decision_period": 1.0,
+    "obs_period": 2.0,
+    "obs_latency_s": 1.0,
+    "count_noise": 0.1,
+    "speed_noise": 0.1,
+    "compliance": 0.6,
+    "restrict_strength": 0.5,
+    "actuation_delay_s": 60.0,
+    "seed": 0
+  },
+  "sweeps": {
+    "compliance": [
+      0.2,
+      0.4,
+      0.6,
+      0.8,
+      1.0
+    ],
+    "actuation_delay_s": [
+      0.0,
+      30.0,
+      60.0,
+      120.0,
+      180.0
+    ],
+    "count_noise": [
+      0.0,
+      0.1,
+      0.2,
+      0.3
+    ]
+  },
+  "generated": "2026-11-21 16:33",
+  "runtime_s": 1259.1,
+  "git_commit": "47ca298",
+  "python": "3.11.9",
+  "numpy": "2.4.6"
+}

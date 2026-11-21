@@ -95,4 +95,5 @@ CSRNet places ~93% of its count on the dense far end of the corridor and under-c
 ## 3. Other changes
 
 - **At most 12 gates** (was 24).
-- **Setup no longer asks for capacity or radius.** Capacity comes from calibration, or the default 300. The radius was removed from the UI because it cannot affect any decision: routing uses distance ÷ the venue's largest distance, and both scale with the radius. It still sets the metres quoted in reasons and in the simulator's walking times.
+- **Setup no longer asks for capacity or radius.** Capacity comes from calibration, or the default 300. The radius was removed because, with even spacing, it cannot affect any decision: routing uses distance ÷ the venue's largest distance, and both scale with it.
+- **Walking distance between gates is now set per segment** (G1→G2, …, Gn→G1) in setup, defaulting to an even ring. Unequal spacing *does* change decisions (v1's distance term is relative), and v2 will compare walk time against queue time in seconds, so real distances matter. Routes go the shorter way round in metres (previously by gate count, a bug with unequal spacing). The map places gates by real distance and labels each segment.

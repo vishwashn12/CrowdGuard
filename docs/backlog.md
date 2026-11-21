@@ -4,6 +4,10 @@ Work we have agreed to do but have parked. Newest decisions first. Each item say
 
 ---
 
+## 0. Done since the plan was written
+
+- **Walking distance between gates** is editable per segment (setup, venue model, map, simulator); uneven-spacing scenario added; the v1 baseline was re-run with it (`reports/decision_eval/engine_v1_baseline`).
+
 ## 1. Decision engine v2 (deferred 2026-11-21)
 
 **Why.** The v1 baseline ([12](12_congestion_control_evaluation.md)) shows diversion works, but it also has four failing known-weakness tests (K1–K4) and six measured weaknesses (W1–W6).

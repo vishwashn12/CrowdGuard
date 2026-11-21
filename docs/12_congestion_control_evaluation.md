@@ -101,6 +101,7 @@ Every policy faces the **same arrivals and sensor noise** for a given seed (comm
 | Venue near saturation | Demand 8% above total capacity; diversion alone cannot fix it |
 | Festival waves (ghats) | 6 entry points; every 10 min a wave hits the next ghat |
 | Surge with degraded sensing | Single surge, but G5 and G6 have no camera and G2's camera freezes for 5 min while G2 is the natural target |
+| Surge with uneven gate spacing | 6 gates; G1 surges; the nearly empty G2 is 450 m away, the busier G6 only 70 m (segments 450/120/120/120/120/70 m). Tests whether walking distance is weighed against queueing |
 
 ### Metrics
 
@@ -115,13 +116,15 @@ Every policy faces the **same arrivals and sensor noise** for a given seed (comm
 | Extra walk | Metres walked per diverted person |
 | **Instruction changes per hour** | How often the instruction at a gate changes: operator and staff burden; chatter |
 
-Robustness sweeps vary one setting at a time on three scenarios: compliance 0.2–1.0, actuation delay 0–180 s, count error 0–30%.
+Robustness sweeps vary one setting at a time on four scenarios (single surge, twin surge, stadium entry, uneven spacing): compliance 0.2–1.0, actuation delay 0–180 s, count error 0–30%.
+
+Venue distances: each scenario is a ring; walking distance between neighbouring gates is the even arc unless the scenario gives per-segment distances (uneven spacing). Diverted people walk the shorter way round **in metres**.
 
 ---
 
 ## Baseline results: engine v1
 
-**Run.** 100 seeds per cell (2,400 runs), plus 50 seeds per sweep cell (8,400 runs); 16 min on 6 CPU cores. Everything is in `reports/decision_eval/engine_v1_baseline/`: `summary.md` (all tables), CSVs of every run, `run_info.json` (settings, commit) and figures. Values are mean ± 95% CI. Commit of the engine under test: `2ccd247`.
+**Run.** 100 seeds per cell (2,800 runs over 7 scenarios), plus 50 seeds per sweep cell (11,200 runs over 4 scenarios); 21 min on 6 CPU cores. Re-run on 2026-11-21 after walking distances became editable: the six evenly spaced scenarios reproduced the previous run's numbers exactly (same seeds), and the uneven-spacing scenario was added. Everything is in `reports/decision_eval/engine_v1_baseline/`: `summary.md` (all tables), CSVs of every run, `run_info.json` (settings, commit) and figures. Values are mean ± 95% CI. Engine under test: v1, unchanged since commit `2ccd247` (the clock hook and the route-direction fix do not change its decisions on even rings).
 
 ### Headline (default settings: compliance 0.6, 60 s actuation delay, 10% count noise)
 
@@ -135,6 +138,7 @@ Exposure at ≥5 people/m², in person-minutes:
 | Near saturation | 77,624 ± 1,767 | 2,903 ± 442 | **74 ± 52** | 2,177 ± 261 |
 | Festival waves | 234,788 ± 6,444 | 0 | **0** | 0 |
 | Degraded sensing | 50,414 ± 355 | 0 | **0** | 0 |
+| Uneven spacing | 50,628 ± 342 | 0 | **0** | 0 |
 
 95th-percentile time to entry, in seconds:
 
@@ -146,6 +150,7 @@ Exposure at ≥5 people/m², in person-minutes:
 | Near saturation | 1,185 | 313 | **219** | 299 |
 | Festival waves | 1,236 | 241 | **237** | 234 |
 | Degraded sensing | 1,993 | 188 | **175** | 132 |
+| Uneven spacing | 2,072 | 195 | **190** | 179 |
 
 Instruction changes per hour (whole venue):
 
@@ -157,6 +162,7 @@ Instruction changes per hour (whole venue):
 | Near saturation | 1,737 | **1,426** | 194 |
 | Festival waves | 129 | **129** | 75 |
 | Degraded sensing | 295 | **184** | 58 |
+| Uneven spacing | 298 | **180** | 26 |
 
 Figures: `fig_main_danger_person_s.png`, `fig_main_peak_density.png`, `fig_main_p95_wait_s.png`, `fig_main_switches_per_hour.png`, `fig_timeseries_single_surge.png`.
 
@@ -177,6 +183,7 @@ Figures: `fig_main_danger_person_s.png`, `fig_main_peak_density.png`, `fig_main_
 | W3 | **Needs ≥ 60% compliance.** At 40% compliance v1 leaves 9,317 person-minutes in the single surge, where the perfect-information rule has 0. At 20% every policy fails, and v1 never escalates to RESTRICT_INFLOW, because a viable target still "exists". | `fig_sweep_compliance.png` | K4 (all-or-nothing), no escalation |
 | W4 | **Full compliance makes all-or-nothing overshoot.** In the twin surge, exposure rises from 0 at 60% compliance to 47 ± 44 at 100%: sending *everyone* moves the queue to the target. | `sens_compliance.csv` | K1, K4 |
 | W5 | **Waits are longer than necessary.** The perfect-information rule reaches a 24% lower 95th-percentile wait in the single surge (132 vs 174 s) with similar diversion volume, so allocation, not information alone, leaves time on the table. | summary tables | K4, routing weights |
+| W7 | **Distance is weighed relatively, not as walking time.** With uneven spacing, v1's diverted people walk 124 m on average against 87 m for both the nearest-gate rule and the perfect-information rule: some are sent 450 m to the emptiest gate instead of 70 m to a busier one with room. At a 180 s instruction delay v1 has 8,800 person-minutes of danger here, against 3,830 for the perfect-information rule. | `uneven_spacing` rows, delay sweep | routing weights; no walk-time model |
 | W6 | **Restriction is never used.** "Arrivals held back" is 0% for v1 in every scenario, including near saturation, where demand exceeds capacity. | summary tables | RESTRICT only when *no* target is viable |
 
 **Not shown by this model:** the stale-target flaw (K3). The frozen G2 camera in *degraded sensing* made no measurable difference (same outcomes as single surge), because G2 really had spare capacity during the freeze. K3 stays a logic defect, proven by its unit test, that this scenario did not punish. A scenario where the frozen target is *filling* would show it.
@@ -193,6 +200,7 @@ Each weakness maps to one planned change, and each change has a test that must f
 | Short-horizon forecast (time-to-critical) | W2 | exposure at long delays |
 | Escalate to RESTRICT when diversion is not enough | W3, W6 | exposure at 20% compliance; near saturation |
 | Reject targets with stale data | K3 | K3 test; a new "frozen filling target" scenario |
+| Choose targets by walk time + expected wait, in seconds (uses the real segment distances) | W7 | extra walk and p95 wait in uneven spacing; danger at long delays |
 
 The comparison is re-run with `python scripts/evaluate_decisions.py --label engine_v2 --policies no_control,nearest_gate,engine_v1,engine_v2,informed`, which puts v1 and v2 side by side on identical seeds.
 
