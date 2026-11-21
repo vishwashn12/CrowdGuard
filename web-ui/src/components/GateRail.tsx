@@ -42,7 +42,7 @@ export function GateRail({ snap, order, selected, onSelect, thumbnails }: Props)
               <div className="rail-mid">
                 <span className="rail-count">
                   {live ? Math.round(g.crowd_count) : '—'}
-                  <small>/{g.capacity}</small>
+                  <small>{g.calibration ? (live && g.density_m2 != null ? ` · ${g.density_m2.toFixed(1)}/m²` : ' · zone') : `/${g.capacity}`}</small>
                 </span>
                 {live && <T size={14} className={`trend trend-${g.trend.toLowerCase()}`} />}
                 <span className="spacer" />

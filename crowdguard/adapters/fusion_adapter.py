@@ -30,6 +30,7 @@ from crowdguard.decision.fusion import build_crowd_state, build_unmonitored_stat
 
 # The only model-layer imports permitted anywhere in the decision half.
 from crowdguard.models.contracts import CSRNetResult, MotionResult
+from crowdguard.utils.calibration import GroundCalibration
 
 _FRESHNESS_TO_STATUS = {
     MotionFreshness.NEW: MotionStatus.OK,
@@ -63,6 +64,7 @@ class FusionAdapter:
         stale_frame_gap: int = 10,
         sync_result: SyncResult | None = None,
         now: float | None = None,
+        calibration: GroundCalibration | None = None,
     ) -> CrowdState:
         """Build a :class:`CrowdState` for one gate.
 
@@ -75,6 +77,15 @@ class FusionAdapter:
             stale_frame_gap: Frame gap past which motion is excluded.
             sync_result: A pre-computed pairing, if the caller already has one.
             now: Wall-clock override, for deterministic tests.
+            calibration: Ground calibration of this gate's camera. When given,
+                people are counted only inside the calibrated zone, speed is
+                the zone's walking speed in m/s, and capacity follows from the
+                zone's area. The zone count is the larger of the density map's
+                masked sum and the number of tracked people standing in the
+                zone: CSRNet (trained on dense, distant crowds) under-counts
+                large people near the camera by about 3x on this footage,
+                while the detector misses small distant ones. Taking the
+                larger errs on the side of safety.
 
         Raises:
             ValueError: If the two results come from different cameras.
@@ -115,7 +126,28 @@ class FusionAdapter:
         motion_valid = sync_result.is_valid_motion
         motion_status = _FRESHNESS_TO_STATUS.get(sync_result.status, MotionStatus.UNAVAILABLE)
 
+        area_m2: float | None = None
+        provenance = sync_result.provenance
+        if calibration is not None:
+            area_m2 = calibration.area_m2
+            if csrnet_result is not None:
+                crowd_count = calibration.count_in_zone(csrnet_result.density_map)
+            # The tracked head-count is usable even when the motion result is a
+            # little late for speed purposes: people do not vanish in a stride.
+            if motion is not None:
+                crowd_count = max(crowd_count, float(motion.zone_track_count))
+            zone_speed = motion.median_speed_ms if (motion_valid and motion) else None
+            if zone_speed is None and motion_valid:
+                # Motion exists, but too few people are in the zone to measure
+                # their walking speed. Score on density alone rather than
+                # inventing a speed.
+                motion_valid = False
+                motion_status = MotionStatus.UNAVAILABLE
+                provenance = "too few people in the calibrated zone to measure speed"
+
         velocity = motion.median_velocity if (motion_valid and motion) else 0.0
+        if calibration is not None and motion_valid and motion is not None:
+            velocity = float(motion.median_speed_ms or 0.0)
         direction = motion.dominant_direction_deg if (motion_valid and motion) else 0.0
         flow_consistency = motion.flow_consistency if (motion_valid and motion) else 0.0
 
@@ -139,11 +171,12 @@ class FusionAdapter:
             has_density=has_density,
             has_motion=motion_valid,
             motion_status=motion_status,
-            motion_provenance=sync_result.provenance,
+            motion_provenance=provenance,
             motion_age_frames=sync_result.age_frames,
             trend=trend,
             config=self._config,
             timestamp=timestamp,
+            area_m2=area_m2,
         )
 
     @staticmethod

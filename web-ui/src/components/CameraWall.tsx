@@ -71,7 +71,7 @@ export function CameraWall({ snap, order, selected, onSelect }: Props) {
                 <div className="tile-bottom">
                   <span className="tile-stat" title="People (CSRNet)">
                     <Users size={14} />{live ? Math.round(g.crowd_count) : '—'}
-                    <small>/ {g.capacity}</small>
+                    <small>{g.calibration ? (live && g.density_m2 != null ? `${g.density_m2.toFixed(1)}/m²` : 'in zone') : `/ ${g.capacity}`}</small>
                   </span>
                   {live && g.sitting_count > 0 && (
                     <span className="tile-stat tile-anom" title="Sitting or fallen"><PersonStanding size={14} />{g.sitting_count}</span>

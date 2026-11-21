@@ -6,6 +6,46 @@ export type Severity = 'EMERGENCY' | 'ALERT' | 'WARNING' | 'INFO';
 export type Trend = 'DECREASING' | 'STABLE' | 'INCREASING';
 export type SessionState = 'setup' | 'running';
 
+export type Verb = 'STOP_ENTRY' | 'HOLD_OUTSIDE' | 'DIVERT' | 'GET_READY' | 'SEND_STAFF';
+export type InstructionLevel = 'critical' | 'high' | 'watch';
+
+/** A short operator instruction (see crowdguard/alerts/commands.py). */
+export interface Instruction {
+  channel: 'command' | 'incident';
+  verb: Verb;
+  verb_label: string;
+  gate_id: string;
+  target: string | null;
+  kind: string | null;
+  level: InstructionLevel;
+  headline: string;
+  reason: string;
+  detail: string;
+  radio: string;
+  since: number;
+}
+
+export interface LogEntry {
+  verb: Verb;
+  verb_label: string;
+  gate_id: string;
+  target: string | null;
+  kind: string | null;
+  level: InstructionLevel;
+  headline: string;
+  reason: string;
+  time: number;
+  last_seen: number;
+  occurrences: number;
+}
+
+export interface Calibration {
+  points: [number, number][];
+  width_m: number;
+  length_m: number;
+  area_m2: number;
+}
+
 export interface Gate {
   gate_id: string;
   name: string | null;
@@ -19,6 +59,10 @@ export interface Gate {
   utilization: number;
 
   velocity: number;
+  velocity_unit: 'px/s' | 'm/s';
+  calibration: Calibration | null;
+  density_m2: number | null;
+  command: Instruction | null;
   direction: number;
   flow_consistency: number;
   track_count: number;
@@ -110,6 +154,9 @@ export interface Snapshot {
   alerts: Alert[];
   alert_counts: Record<string, number>;
   incidents: Alert[];
+  commands: Instruction[];
+  incident_list: Instruction[];
+  instruction_log: LogEntry[];
   timestamp: number;
 }
 
@@ -152,5 +199,7 @@ export interface VenueConfig {
     capacity: number;
     camera_id: string | null;
     is_monitored: boolean;
+    calibration: Calibration | null;
+    effective_capacity: number;
   }[];
 }

@@ -21,12 +21,13 @@ import uuid
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from crowdguard.config.schemas import CameraConfig
 from crowdguard.pipeline.orchestrator import Orchestrator
+from crowdguard.utils.calibration import CalibrationError, GroundCalibration
 from crowdguard.utils.exceptions import CameraRegistryError, SessionError
 from crowdguard.venue.builder import MAX_GATES, MIN_GATES
 from crowdguard.web.overlay import placeholder_jpeg
@@ -52,6 +53,15 @@ _TELEMETRY_INTERVAL_S = 0.5
 # Upload filenames are operator-supplied, so only a conservative character set
 # survives into a path we write to.
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9._-]+")
+
+
+class CalibrationRequest(BaseModel):
+    """Four ground points (normalised image coordinates, in order around a
+    rectangle on the floor) and that rectangle's real size."""
+
+    points: list[list[float]] = Field(..., min_length=4, max_length=4)
+    width_m: float = Field(..., gt=0)
+    length_m: float = Field(..., gt=0)
 
 
 class VenueRequest(BaseModel):
@@ -230,6 +240,11 @@ def create_app(orchestrator: Orchestrator) -> FastAPI:
                     "capacity": venue.get_gate_capacity(gate_id),
                     "camera_id": venue.camera_for_gate(gate_id),
                     "is_monitored": venue.is_monitored(gate_id),
+                    "calibration": (
+                        orchestrator.calibration_for_gate(gate_id).to_dict()
+                        if orchestrator.calibration_for_gate(gate_id) else None
+                    ),
+                    "effective_capacity": orchestrator.effective_capacity(gate_id),
                 }
                 for gate_id in venue.gate_ids
             ],
@@ -444,6 +459,52 @@ def create_app(orchestrator: Orchestrator) -> FastAPI:
             "anomaly_stride": producer.anomaly_stride if producer else None,
             "replaced_camera": existing_camera,
         })
+
+    # ==================================================================
+    # Ground calibration
+    # ==================================================================
+
+    @app.get("/api/gates/{gate_id}/still")
+    async def gate_still(gate_id: str) -> Response:
+        """First frame of a gate's footage, without overlays, for calibration."""
+        if not orchestrator.venue.has_gate(gate_id):
+            raise HTTPException(status_code=404, detail=f"Unknown gate {gate_id!r}")
+        jpeg = await asyncio.to_thread(orchestrator.still_frame, gate_id)
+        if jpeg is None:
+            raise HTTPException(status_code=404, detail=f"{gate_id} has no footage")
+        return Response(jpeg, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+
+    @app.put("/api/gates/{gate_id}/calibration")
+    async def set_calibration(gate_id: str, request: CalibrationRequest) -> dict:
+        """Calibrate the camera on a gate from four ground points and a size."""
+        if not orchestrator.venue.has_gate(gate_id):
+            raise HTTPException(status_code=404, detail=f"Unknown gate {gate_id!r}")
+        try:
+            calibration = GroundCalibration(
+                points=tuple((float(x), float(y)) for x, y in request.points),
+                width_m=request.width_m,
+                length_m=request.length_m,
+            )
+            saved = await asyncio.to_thread(orchestrator.set_calibration, gate_id, calibration)
+        except SessionError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except (CalibrationError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {"gate_id": gate_id, "calibration": saved,
+                "capacity": orchestrator.effective_capacity(gate_id)}
+
+    @app.delete("/api/gates/{gate_id}/calibration")
+    async def clear_calibration(gate_id: str) -> dict:
+        if not orchestrator.venue.has_gate(gate_id):
+            raise HTTPException(status_code=404, detail=f"Unknown gate {gate_id!r}")
+        try:
+            await asyncio.to_thread(orchestrator.set_calibration, gate_id, None)
+        except SessionError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {"gate_id": gate_id, "calibration": None,
+                "capacity": orchestrator.effective_capacity(gate_id)}
 
     @app.post("/api/cameras/{camera_id}/reassign")
     async def reassign_camera(camera_id: str, gate_id: str = Form(...)) -> dict:

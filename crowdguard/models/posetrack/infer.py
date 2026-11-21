@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 import math
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 import numpy as np
@@ -32,6 +32,7 @@ from crowdguard.models.contracts import (
 from crowdguard.models.posetrack.classifier import AnomalyClassifier
 from crowdguard.models.posetrack.features import build_feature_vector
 from crowdguard.models.posetrack.tracker import CameraAnomalyTracker
+from crowdguard.utils.calibration import GroundCalibration
 from crowdguard.utils.geometry import box_center
 
 logger = logging.getLogger(__name__)
@@ -63,6 +64,10 @@ class PoseTrackInference:
         self._previous_centers: dict[str, dict[int, _TrackCenter]] = {}
         self._last_frame_id: dict[str, int] = {}
         self._last_loop_index: dict[str, int] = {}
+        # Ground calibration per camera, and each track's last foot position on
+        # the ground (metres), for walking speed in m/s.
+        self._ground: dict[str, GroundCalibration] = {}
+        self._previous_ground: dict[str, dict[int, tuple[float, float]]] = {}
 
         logger.info(
             "PoseTrackInference ready: model=%s tracker=%s device=%s conf=%.2f imgsz=%d "
@@ -103,6 +108,14 @@ class PoseTrackInference:
             tracker.config = self._anomaly_config.scaled_for_stride(stride)
             tracker.stride = stride
         return tracker
+
+    def set_ground_calibration(self, camera_id: str, calibration: GroundCalibration | None) -> None:
+        """Attach (or with None, remove) a camera's ground-plane calibration."""
+        if calibration is None:
+            self._ground.pop(camera_id, None)
+        else:
+            self._ground[camera_id] = calibration
+        self._previous_ground.pop(camera_id, None)
 
     # ------------------------------------------------------------------
     # Public API
@@ -235,6 +248,7 @@ class PoseTrackInference:
         if previous_loop is not None and packet.loop_index != previous_loop:
             self.tracker_for(camera_id, packet.anomaly_stride).reset()
             self._previous_centers.pop(camera_id, None)
+            self._previous_ground.pop(camera_id, None)
             self._reset_bytetrack(camera_id)
             return True, 0
 
@@ -288,13 +302,49 @@ class PoseTrackInference:
 
         self._previous_centers[camera_id] = current
 
-        return self._build_motion_result(
+        result = self._build_motion_result(
             packet=packet,
             velocities=velocities,
             displacements=displacements,
             track_count=len(current),
             inference_ms=inference_ms,
         )
+        calibration = self._ground.get(camera_id)
+        if calibration is None or packet.frame is None:
+            return result
+        speed, in_zone = self._ground_speed(camera_id, calibration, packet, detections, fps)
+        return replace(result, median_speed_ms=speed, zone_track_count=in_zone)
+
+    MIN_ZONE_TRACKS = 3
+
+    def _ground_speed(self, camera_id, calibration, packet, detections, fps) -> tuple[float | None, int]:
+        """Median walking speed (m/s) of people whose feet are in the zone.
+
+        A person's ground position is the bottom-centre of their box mapped
+        through the homography. Only people inside the zone count, so speed and
+        density describe the same patch of ground.
+        """
+        height, width = packet.frame.shape[:2]
+        previous = self._previous_ground.get(camera_id, {})
+        current: dict[int, tuple[float, float]] = {}
+        if detections:
+            feet = np.array([((b[0] + b[2]) / 2.0, b[3]) for b, _tid, _kp in detections])
+            ground = calibration.to_ground(feet, width, height)
+            inside = calibration.inside_ground(ground)
+            speeds = []
+            for (bbox, track_id, _kp), g, ok in zip(detections, ground, inside):
+                if not ok:
+                    continue
+                current[track_id] = (float(g[0]), float(g[1]))
+                if track_id in previous:
+                    px, py = previous[track_id]
+                    speeds.append(math.hypot(g[0] - px, g[1] - py) * fps)
+        else:
+            speeds = []
+        self._previous_ground[camera_id] = current
+        if len(speeds) < self.MIN_ZONE_TRACKS:
+            return None, len(current)
+        return float(np.median(speeds)), len(current)
 
     def _build_motion_result(
         self,
@@ -517,6 +567,9 @@ class PoseTrackInference:
         self._previous_centers.pop(camera_id, None)
         self._last_frame_id.pop(camera_id, None)
         self._last_loop_index.pop(camera_id, None)
+        # the calibration describes the camera and survives a new session;
+        # only the per-track ground positions are history
+        self._previous_ground.pop(camera_id, None)
         self._reset_bytetrack(camera_id)
 
     def release_camera(self, camera_id: str) -> None:
@@ -526,6 +579,8 @@ class PoseTrackInference:
         self._previous_centers.pop(camera_id, None)
         self._last_frame_id.pop(camera_id, None)
         self._last_loop_index.pop(camera_id, None)
+        self._ground.pop(camera_id, None)
+        self._previous_ground.pop(camera_id, None)
 
     def stats(self) -> dict:
         return {

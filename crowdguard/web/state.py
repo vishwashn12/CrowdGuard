@@ -30,7 +30,7 @@ class GateState:
 
     gate_id: str
     name: str | None = None
-    capacity: int = 500
+    capacity: int = 200
     camera_id: str | None = None
     is_monitored: bool = False
 
@@ -76,6 +76,14 @@ class GateState:
     reason: str = ""
     route: list[str] = field(default_factory=list)
 
+    # Ground calibration (None = uncalibrated) and the physical readings it enables
+    calibration: dict | None = None
+    density_m2: float | None = None
+    velocity_unit: str = "px/s"
+
+    # The single operator command in force at this gate, if any
+    command: dict | None = None
+
     # Provenance
     frame_id: int = 0
     video_timestamp: float = 0.0
@@ -120,6 +128,11 @@ class DashboardState:
         self.alert_counts: dict[str, int] = {}
         self.recent_incidents: list[dict] = []
 
+        # Operator instructions: commands (crowd), incidents (send staff), log
+        self.commands: list[dict] = []
+        self.incident_list: list[dict] = []
+        self.instruction_log: list[dict] = []
+
         # "setup": configuring, feeds staged but not playing.
         # "running": Start pressed, every gate playing on one clock.
         self.session_state: str = "setup"
@@ -135,6 +148,7 @@ class DashboardState:
         capacity: int,
         name: str | None = None,
         camera_id: str | None = None,
+        calibration: dict | None = None,
     ) -> None:
         """Create or refresh a gate entry, preserving any history it has."""
         with self._lock:
@@ -147,6 +161,7 @@ class DashboardState:
                     camera_id=camera_id,
                     is_monitored=camera_id is not None,
                     action="NO_DATA" if camera_id is None else "INITIALIZING",
+                    calibration=calibration,
                 )
                 return
 
@@ -154,6 +169,7 @@ class DashboardState:
             existing.name = name or existing.name
             existing.camera_id = camera_id
             existing.is_monitored = camera_id is not None
+            existing.calibration = calibration
 
     def bind_camera(self, gate_id: str, camera_id: str | None) -> None:
         """Attach or detach a camera, resetting per-feed fields on detach."""
@@ -199,6 +215,11 @@ class DashboardState:
             self.active_alerts = []
             self.alert_counts = {}
             self.recent_incidents = []
+            self.commands = []
+            self.incident_list = []
+            self.instruction_log = []
+            for gate in self.gates.values():
+                gate.command = None
 
     def set_session(self, state: str, started_at: float | None = None) -> None:
         with self._lock:
@@ -236,6 +257,8 @@ class DashboardState:
                 gate.target_gate = None
                 gate.reason = ""
                 gate.route = []
+                gate.command = None
+                gate.density_m2 = None
                 gate.count_history.clear()
                 gate.score_history.clear()
                 gate.anomaly_history.clear()
@@ -256,19 +279,27 @@ class DashboardState:
             gate = self.gates.get(gate_id)
             if gate is None:
                 return
-            gate.crowd_count = result.crowd_count
             gate.frame_id = result.frame_id
             gate.video_timestamp = result.video_timestamp
             gate.csrnet_latency_ms = result.inference_time_ms
             gate.last_update = time.time()
-            self._append_capped(gate.count_history, round(result.crowd_count, 1))
+            # A calibrated gate's count is the zone count from the fused state,
+            # not this whole-frame figure.
+            if gate.calibration is None:
+                gate.crowd_count = result.crowd_count
+                self._append_capped(gate.count_history, round(result.crowd_count, 1))
 
     def update_motion(self, gate_id: str, result: MotionResult) -> None:
         with self._lock:
             gate = self.gates.get(gate_id)
             if gate is None:
                 return
-            gate.velocity = result.median_velocity
+            # Calibrated gates report the zone's walking speed in m/s; never let
+            # the raw px/s figure overwrite it.
+            if result.median_speed_ms is not None:
+                gate.velocity = result.median_speed_ms
+            elif gate.calibration is None:
+                gate.velocity = result.median_velocity
             gate.direction = result.dominant_direction_deg
             gate.flow_consistency = result.flow_consistency
             gate.track_count = result.track_count
@@ -304,6 +335,10 @@ class DashboardState:
             gate.trend = state.trend.value
             gate.motion_status = state.motion_status.value
             gate.confidence = state.confidence
+            gate.density_m2 = state.density_per_m2
+            gate.velocity_unit = state.velocity_unit
+            if gate.calibration is not None:
+                self._append_capped(gate.count_history, round(state.crowd_count, 1))
             gate.last_update = time.time()
             self._append_capped(gate.score_history, round(state.congestion_score, 3))
 
@@ -340,6 +375,16 @@ class DashboardState:
             self.alert_counts = dict(counts)
             if incidents is not None:
                 self.recent_incidents = [alert.to_dict() for alert in incidents]
+
+    def update_instructions(self, commands: list[dict], incidents: list[dict], log: list[dict]) -> None:
+        """Publish operator commands, incidents and the instruction log."""
+        with self._lock:
+            self.commands = commands
+            self.incident_list = incidents
+            self.instruction_log = log
+            by_gate = {c["gate_id"]: c for c in commands}
+            for gate_id, gate in self.gates.items():
+                gate.command = by_gate.get(gate_id)
 
     def set_pipeline_stats(self, stats: dict) -> None:
         with self._lock:
@@ -383,7 +428,11 @@ class DashboardState:
                         gate.crowd_count / gate.capacity, 3
                     ) if gate.capacity else 0.0,
 
-                    "velocity": round(gate.velocity, 1),
+                    "velocity": round(gate.velocity, 2 if gate.velocity_unit == "m/s" else 1),
+                    "velocity_unit": gate.velocity_unit,
+                    "calibration": gate.calibration,
+                    "density_m2": round(gate.density_m2, 2) if gate.density_m2 is not None else None,
+                    "command": gate.command,
                     "direction": round(gate.direction, 1),
                     "flow_consistency": round(gate.flow_consistency, 3),
                     "track_count": gate.track_count,
@@ -442,6 +491,9 @@ class DashboardState:
                 "alerts": self.active_alerts,
                 "alert_counts": self.alert_counts,
                 "incidents": self.recent_incidents,
+                "commands": self.commands,
+                "incident_list": self.incident_list,
+                "instruction_log": self.instruction_log,
                 "timestamp": time.time(),
             }
 

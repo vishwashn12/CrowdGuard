@@ -18,6 +18,7 @@
 9. **A detection ceiling.** The shipped detector finds 26% of labelled seated people and 8% of distant (< 80 px) people at IoU 0.3. The best configuration tested finds 45%.
 
 ### Counting and congestion
+0. **Calibration depends on operator-entered dimensions** and assumes flat ground; CSRNet under-counts people near the camera by ~3x, so calibrated zones take the larger of CSRNet and detector counts ([13](13_instructions_and_calibration.md)). The sitting classifier's false positives now surface as many SEND STAFF incidents.
 10. **CSRNet has no valid evaluation on this footage.** The prototype's validation compared against annotation-box counts, not crowd counts. The model is used off the shelf from ShanghaiTech Part A, and the shipped single-scale setting under-counts by about 10% relative to 3-scale.
 11. **Congestion and routing are heuristics validated only in simulation.** All weights and thresholds are hand-set; the closed-loop evaluation ([12](12_congestion_control_evaluation.md)) uses a macroscopic model with assumed parameters, not field data. In the current code, `capacity_utilization` equals `density_score`, so the formula weights one quantity at 0.8.
 12. **Calibration is per camera and per venue.** `max_expected_velocity` is in px/s and depends on resolution, zoom and distance. Gate capacities are placeholders. Distances assume an idealised ring.

@@ -35,7 +35,7 @@ SEED = 20261121
 
 
 def random_case(rng: random.Random):
-    n = rng.randint(2, 24)
+    n = rng.randint(2, 12)
     monitored = rng.randint(1, n)
     venue = make_venue(n, monitored=monitored, radius_m=rng.choice([40.0, 120.0, 300.0]))
     config = DecisionConfig()

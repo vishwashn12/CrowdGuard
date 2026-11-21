@@ -62,29 +62,36 @@ export function fmtAge(sec: number): string {
   return `${Math.floor(sec / 3600)}h`;
 }
 
+/** What the gate's chip says: its command if it has one. */
 export function actionLabel(g: Gate, running: boolean): string {
   const mode = gateMode(g, running);
   if (mode === 'nofeed') return running ? 'Routing target' : 'No footage';
   if (mode === 'staged') return 'Ready';
-  switch (g.action) {
-    case 'DIVERT': return g.target_gate ? `Divert → ${g.target_gate}` : 'Divert';
-    case 'RESTRICT_INFLOW': return 'Restrict inflow';
-    case 'MONITOR': return 'Monitor';
-    case 'NO_ACTION': return 'Normal';
-    case 'HOLD': return 'Hold';
-    case 'INITIALIZING': return 'Starting…';
-    case 'NO_DATA': return 'No data';
-    default: return g.action.replace(/_/g, ' ').toLowerCase();
-  }
+  if (g.command) return g.command.target ? `${g.command.verb_label} → ${g.command.target}` : g.command.verb_label;
+  if (g.action === 'INITIALIZING') return 'Starting…';
+  return 'Normal';
 }
 
-/** Action family, which drives the chip colour. */
-export function actionTone(g: Gate, running: boolean): 'divert' | 'restrict' | 'monitor' | 'calm' | 'idle' {
+export type Tone = 'stop' | 'divert' | 'ready' | 'calm' | 'idle';
+
+export function actionTone(g: Gate, running: boolean): Tone {
   if (gateMode(g, running) !== 'live') return 'idle';
-  if (g.action === 'DIVERT') return 'divert';
-  if (g.action === 'RESTRICT_INFLOW' || g.action === 'HOLD') return 'restrict';
-  if (g.action === 'MONITOR') return 'monitor';
+  const v = g.command?.verb;
+  if (v === 'STOP_ENTRY' || v === 'HOLD_OUTSIDE') return 'stop';
+  if (v === 'DIVERT') return 'divert';
+  if (v === 'GET_READY') return 'ready';
   return 'calm';
+}
+
+/** Crowd load in the most meaningful unit available: people/m^2 when the
+ *  camera is calibrated, share of the assumed capacity otherwise. */
+export function loadText(g: Gate): string {
+  if (g.density_m2 !== null && g.density_m2 !== undefined) return `${g.density_m2.toFixed(1)}/m²`;
+  return `${Math.round((g.utilization || 0) * 100)}%`;
+}
+
+export function speedText(g: Gate): string {
+  return g.velocity_unit === 'm/s' ? `${g.velocity.toFixed(2)} m/s` : `${Math.round(g.velocity)} px/s`;
 }
 
 export function gateLabel(g: Gate): string {

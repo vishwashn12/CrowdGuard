@@ -326,11 +326,11 @@ class TestS13Determinism:
 
 
 class TestS14Scale:
-    """S14 - a 24-gate venue is evaluated well inside the 0.5 s decision period."""
+    """S14 - a 12-gate venue (the maximum) is evaluated well inside the 0.5 s decision period."""
 
     def test_sweep_latency(self):
-        engine, _ = new_engine(24)
-        states = ring(24, {"G1": 470, "G7": 460, "G13": 450, "G19": 440}, default=250.0)
+        engine, _ = new_engine(12)
+        states = ring(12, {"G1": 470, "G4": 460, "G7": 450, "G10": 440}, default=250.0)
         timings = []
         for _ in range(20):
             t0 = time.perf_counter()

@@ -26,6 +26,8 @@ Every number here was either read from the code or artifacts, or measured on the
 | [10_limitations_future_work.md](10_limitations_future_work.md) | What is unvalidated, known weaknesses, next experiments | Limitations, Future work |
 | [11_reproducibility.md](11_reproducibility.md) | Versions, hardware, commands, seeds, file inventory, commit history | Reproducibility / appendix |
 | [12_congestion_control_evaluation.md](12_congestion_control_evaluation.md) | How the rule-based decisions are tested: scenario suite, invariants, closed-loop simulation; baseline results for engine v1 and its known weaknesses | Method: evaluation, Results |
+| [13_instructions_and_calibration.md](13_instructions_and_calibration.md) | Operator commands/incidents vocabulary; 4-point ground calibration (people/m², m/s); CSRNet near-camera under-count finding | Method: decision support UI, calibration; Discussion |
+| [backlog.md](backlog.md) | Agreed but deferred work: engine v2 plan, ablation run-time estimates, feature removal, better inputs | (planning, not a paper section) |
 
 ## Key numbers
 
@@ -41,7 +43,7 @@ Every number here was either read from the code or artifacts, or measured on the
 | Sitting | precision 0.158, recall 0.379 | re-scored |
 | Detector recall on labelled seated people | 26% with the shipped detector (pose-m @1280); 45% best observed (det-l @1440) | own study, IoU ≥ 0.3 |
 | Real-time | 3 cameras, 27 fps playback per gate, 3.9 analysed fps per gate, on an RTX 3050 6 GB laptop GPU | live measurement |
-| Tests | 918 tests + 4 expected failures (known engine weaknesses), no GPU needed | `pytest` |
+| Tests | 954 tests + 4 expected failures (known engine weaknesses), no GPU needed | `pytest` |
 | Decision evaluation | engine v1 removes > 99.9% of exposure at ≥5 people/m² vs no control in 6 simulated scenarios; up to 1,426 instruction changes/h | [12](12_congestion_control_evaluation.md) |
 
 ## Contributions you can defensibly claim

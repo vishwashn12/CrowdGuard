@@ -42,6 +42,7 @@ def compute_congestion_score(
     capacity_utilization: float,
     config: DecisionConfig,
     has_motion: bool = True,
+    max_expected_velocity: float | None = None,
 ) -> float:
     """Compose a congestion score in [0, 1] from an observation.
 
@@ -55,6 +56,8 @@ def compute_congestion_score(
         capacity_utilization: count/capacity clamped to [0, 1].
         config: Weights and thresholds.
         has_motion: Whether a valid, fresh motion observation exists.
+        max_expected_velocity: Free-flow speed in the same unit as ``velocity``.
+            Defaults to the configured px/s value; calibrated gates pass m/s.
     """
     w = config.congestion_weights
 
@@ -69,7 +72,8 @@ def compute_congestion_score(
         return _clamp01(raw)
 
     # Faster crowd means less congestion: the crowd is still flowing.
-    inv_velocity = 1.0 - _clamp01(velocity / w.max_expected_velocity)
+    free_flow = max_expected_velocity or w.max_expected_velocity
+    inv_velocity = 1.0 - _clamp01(velocity / free_flow)
 
     raw = (
         w.w_density * _clamp01(density_score)
@@ -103,8 +107,14 @@ def build_crowd_state(
     config: DecisionConfig | None = None,
     timestamp: float | None = None,
     is_synthetic: bool = False,
+    area_m2: float | None = None,
 ) -> CrowdState:
     """Assemble a complete :class:`CrowdState` from raw observation values.
+
+    When ``area_m2`` is given the gate is calibrated: ``crowd_count`` is the
+    count inside the ground zone, ``velocity`` is in m/s, and capacity is the
+    zone area times ``calibrated_capacity_density`` (``gate_capacity`` is then
+    ignored).
 
     Derives ``density_score``, ``congestion_score`` and ``congestion_level``,
     and degrades ``confidence`` when either half of the observation is missing.
@@ -117,6 +127,9 @@ def build_crowd_state(
     if timestamp is None:
         timestamp = time.time()
 
+    calibrated = area_m2 is not None and area_m2 > 0
+    if calibrated:
+        gate_capacity = max(1, int(round(area_m2 * config.calibrated_capacity_density)))
     density_score = _clamp01(crowd_count / gate_capacity) if gate_capacity > 0 else 0.0
     capacity_utilization = density_score
 
@@ -131,6 +144,7 @@ def build_crowd_state(
         capacity_utilization=capacity_utilization,
         config=config,
         has_motion=motion_valid,
+        max_expected_velocity=config.free_walking_speed_ms if calibrated else None,
     )
 
     effective_confidence = _clamp01(confidence)
@@ -159,7 +173,15 @@ def build_crowd_state(
         motion_provenance=motion_provenance,
         motion_age_frames=motion_age_frames,
         is_synthetic=is_synthetic,
+        velocity_unit="m/s" if calibrated else "px/s",
+        area_m2=area_m2 if calibrated else None,
     )
+
+
+def calibrated_capacity(area_m2: float, config: DecisionConfig | None = None) -> int:
+    """Capacity of a calibrated zone: its area at the 'full' density."""
+    config = config or DecisionConfig()
+    return max(1, int(round(area_m2 * config.calibrated_capacity_density)))
 
 
 def build_unmonitored_state(

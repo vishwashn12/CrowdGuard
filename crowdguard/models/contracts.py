@@ -125,6 +125,10 @@ class MotionResult:
         flow_consistency: ``norm(sum v) / sum(norm v)`` in [0, 1]; 1 is uniform.
         active_motion_ratio: Fraction of tracks above the motion threshold.
         motion_confidence: Composite confidence in [0, 1].
+        median_speed_ms: Median walking speed in m/s of people inside the
+            calibrated ground zone; None when the camera is not calibrated or
+            too few people are in the zone to measure.
+        zone_track_count: Tracked people whose feet are inside the zone.
     """
 
     camera_id: str
@@ -143,6 +147,8 @@ class MotionResult:
     model_name: str
     device: str
     result_timestamp: float = 0.0
+    median_speed_ms: float | None = None
+    zone_track_count: int = 0
 
     def __post_init__(self) -> None:
         if not (0.0 <= self.dominant_direction_deg < 360.0):

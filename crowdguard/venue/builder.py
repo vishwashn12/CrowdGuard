@@ -14,12 +14,14 @@ from __future__ import annotations
 from crowdguard.venue.models import GateConfig, GeometryConfig, VenueConfig
 from crowdguard.venue.topology import VenueTopology
 
-# Guard rails. One gate has nowhere to divert to, and beyond a few dozen the
-# all-pairs shortest-path step and the dashboard both stop being useful.
+# Guard rails. One gate has nowhere to divert to; beyond twelve the ring view
+# and the operator's attention both stop scaling.
+# DEFAULT_CAPACITY applies to gates whose camera is not calibrated. A
+# calibrated gate's capacity follows from its measured ground zone instead.
 MIN_GATES = 2
-MAX_GATES = 24
+MAX_GATES = 12
 
-DEFAULT_CAPACITY = 500
+DEFAULT_CAPACITY = 200
 DEFAULT_RADIUS_M = 120.0
 
 # Compass-style names for the common small layouts, so a 4-gate venue reads

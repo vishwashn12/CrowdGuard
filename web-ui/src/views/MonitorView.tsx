@@ -8,7 +8,7 @@ import { LEVELS, LEVEL_LABEL, ringOrder } from '../lib/format';
 import { VenueMap } from '../components/VenueMap';
 import { CameraWall } from '../components/CameraWall';
 import { GateRail } from '../components/GateRail';
-import { IncidentPanel } from '../components/IncidentPanel';
+import { InstructionPanel } from '../components/InstructionPanel';
 import { GateDrawer } from '../components/GateDrawer';
 
 export type StageMode = 'map' | 'wall';
@@ -99,7 +99,7 @@ export function MonitorView({ snap, stage, onStage, selected, onSelect, onSetup,
 
       <GateRail snap={snap} order={order} selected={selected} onSelect={toggle} thumbnails={stage === 'map'} />
 
-      <IncidentPanel snap={snap} onSelect={(id) => onSelect(id)} />
+      <InstructionPanel snap={snap} onSelect={(id) => onSelect(id)} />
     </main>
   );
 }

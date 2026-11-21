@@ -27,9 +27,9 @@ function overall(snap: Snapshot): { tone: string; text: string } {
   }
   const live = Object.values(snap.gates).filter((g) => gateMode(g, true) === 'live');
   const worst = live.reduce((m, g) => Math.max(m, levelRank(g.congestion_level)), 0);
-  const emergencies = (snap.alerts || []).filter((a) => a.severity === 'EMERGENCY').length;
+  const critical = [...(snap.commands ?? []), ...(snap.incident_list ?? [])].filter((i) => i.level === 'critical').length;
   const hot = live.filter((g) => levelRank(g.congestion_level) >= 2).length;
-  if (emergencies) return { tone: 'critical', text: `${emergencies} emergenc${emergencies === 1 ? 'y' : 'ies'}` };
+  if (critical) return { tone: 'critical', text: `${critical} critical instruction${critical === 1 ? '' : 's'}` };
   if (worst >= 3) return { tone: 'critical', text: `${hot} gate${hot === 1 ? '' : 's'} congested` };
   if (worst >= 2) return { tone: 'high', text: `${hot} gate${hot === 1 ? '' : 's'} congested` };
   if (worst >= 1) return { tone: 'moderate', text: 'Watching busy gates' };

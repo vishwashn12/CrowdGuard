@@ -43,15 +43,18 @@ the CSRNet checkpoint `PartAmodel_best.pth` in `checkpoints/`.
 
 Open <http://localhost:8000> and use the **Setup** tab:
 
-1. **How many gates?** Pick 2–24. Gates are laid out on a perimeter ring.
-2. **Add footage.** Upload a video per gate. Nothing plays yet: each gate shows a
-   dimmed still of its first frame, so you can check what is where.
+1. **How many gates?** Pick 2–12. Gates are laid out on a perimeter ring.
+2. **Add footage and calibrate.** Upload a video per gate, then press
+   **Calibrate**: click the four corners of a rectangle on the ground in the
+   frame and enter its real size in metres. Calibrated gates are measured in
+   people/m² and m/s; uncalibrated gates assume they are full at 200 people.
+   See `docs/13_instructions_and_calibration.md`.
 3. **Start monitoring.** Every gate with footage begins at the same instant and
    plays at the footage's real frame rate. Clips loop when they end.
 
 While monitoring runs, setup is locked. **Stop** returns you to setup with all
 footage still in place. Gates left without footage still take part in routing as
-diversion targets, on their stated capacity.
+diversion targets, assuming 200 people.
 
 To start with feeds already staged, use the demo config, which reads (and never
 writes) the sample clips in the sibling project. You still press Start; pass
@@ -490,7 +493,7 @@ crowdguard/
 python -m pytest tests -q
 ```
 
-918 tests (plus 4 expected failures that document known engine weaknesses), ~20 seconds, no GPU and no model weights needed — a direct consequence
+954 tests (plus 4 expected failures that document known engine weaknesses), ~20 seconds, no GPU and no model weights needed — a direct consequence
 of keeping the decision layer model-agnostic and the tracker free of inference.
 They cover the venue graph and perimeter routing, congestion scoring and the
 missing-motion path, every engine safety refusal, hysteresis, routing with and

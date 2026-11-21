@@ -26,23 +26,21 @@ export default function App() {
 
   const setStage = useCallback((m: StageMode) => { setStageState(m); savePref('stage', m); }, []);
 
-  // Announce new urgent alerts once each.
+  // Chime once for each new critical instruction.
   useEffect(() => {
     if (!snap) return;
-    const alerts = snap.alerts || [];
-    if (seen.current === null) { seen.current = new Set(alerts.map((a) => a.alert_id)); return; }
-    for (const a of alerts) {
-      if (seen.current.has(a.alert_id)) continue;
-      seen.current.add(a.alert_id);
-      if (snap.session.state !== 'running') continue;
-      if (a.severity === 'EMERGENCY') {
-        toast('err', `${a.gate_id && a.gate_id !== 'ALL' ? `${a.gate_id} · ` : ''}${a.title}`, a.action);
-        if (sound) chime();
-      } else if (a.severity === 'ALERT') {
-        toast('warn', `${a.gate_id && a.gate_id !== 'ALL' ? `${a.gate_id} · ` : ''}${a.title}`, a.action);
-      }
+    const items = [...(snap.commands ?? []), ...(snap.incident_list ?? [])];
+    const keyOf = (i: (typeof items)[number]) => `${i.channel}|${i.gate_id}|${i.verb}|${i.target}|${i.kind}`;
+    if (seen.current === null) { seen.current = new Set(items.map(keyOf)); return; }
+    const live = new Set(items.map(keyOf));
+    for (const i of items) {
+      const key = keyOf(i);
+      if (seen.current.has(key) || snap.session.state !== 'running') continue;
+      // The banner and the panel already show it; a new critical one just chimes.
+      if (i.level === 'critical' && sound) chime();
     }
-  }, [snap, toast, sound]);
+    seen.current = live;  // an instruction that clears and returns is announced again
+  }, [snap, sound]);
 
   const onSession = useCallback(async (action: 'start' | 'stop') => {
     if (busy) return;

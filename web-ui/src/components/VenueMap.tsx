@@ -81,7 +81,6 @@ function VenueMapImpl({ snap, order, selected, onSelect }: Props) {
   const live = gates.filter((g) => gateMode(g, running) === 'live');
   const totalPeople = live.reduce((s, g) => s + (g.crowd_count || 0), 0);
   const diverting = running ? gates.filter((g) => g.action === 'DIVERT' && g.target_gate) : [];
-  const restricting = running ? gates.filter((g) => g.action === 'RESTRICT_INFLOW') : [];
   const arcs = diverting
     .map((g, i) => diversionArc(g, order, nodeR, i % 3))
     .filter((a): a is Arc => a !== null);
@@ -174,7 +173,9 @@ function VenueMapImpl({ snap, order, selected, onSelect }: Props) {
         const mode = gateMode(g, running);
         const isSel = selected === g.gate_id;
         const [lx, ly] = pt(a, R - nodeR - 44);
-        const restricted = restricting.includes(g);
+        const verb = running ? g.command?.verb : undefined;
+        const chip = verb === 'STOP_ENTRY' ? 'STOP ENTRY' : verb === 'HOLD_OUTSIDE' ? 'HOLD OUTSIDE'
+          : verb === 'GET_READY' ? 'GET READY' : null;
         const [rx, ry] = pt(a, R + nodeR + 34);
         return (
           <g key={g.gate_id} className={`vm-gate vm-gate-${mode}`} data-level={g.congestion_level}
@@ -195,7 +196,9 @@ function VenueMapImpl({ snap, order, selected, onSelect }: Props) {
               {mode === 'live' ? Math.round(g.crowd_count) : mode === 'staged' ? '•' : '—'}
             </text>
             {showNames && (
-              <text x={lx} y={ly + 20} className="vm-name">{(g.name ?? '').replace(/ Gate$/, '')}</text>
+              <text x={lx} y={ly + 20} className="vm-name">
+                {mode === 'live' && g.density_m2 != null ? `${g.density_m2.toFixed(1)} /m²` : (g.name ?? '').replace(/ Gate$/, '')}
+              </text>
             )}
 
             {mode === 'live' && g.anomaly_count > 0 && (
@@ -205,10 +208,10 @@ function VenueMapImpl({ snap, order, selected, onSelect }: Props) {
               </g>
             )}
 
-            {restricted && (
-              <g transform={`translate(${f(rx)}, ${f(ry)})`} className="vm-restrict">
-                <rect x={-50} y={-16} width={100} height={32} rx={8} />
-                <text y={6}>RESTRICT</text>
+            {chip && (
+              <g transform={`translate(${f(rx)}, ${f(ry)})`} className={`vm-chip vm-chip-${verb}`}>
+                <rect x={-chip.length * 6.4 - 12} y={-16} width={chip.length * 12.8 + 24} height={32} rx={8} />
+                <text y={6}>{chip}</text>
               </g>
             )}
           </g>

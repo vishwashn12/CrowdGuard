@@ -18,7 +18,7 @@ from crowdguard.venue.builder import (
 
 
 class TestGateCount:
-    @pytest.mark.parametrize("count", [2, 3, 4, 5, 6, 8, 12, 24])
+    @pytest.mark.parametrize("count", [2, 3, 4, 5, 6, 8, 10, 12])
     def test_builds_requested_number_of_gates(self, count):
         venue = build_ring_topology(count)
         assert venue.gate_count == count

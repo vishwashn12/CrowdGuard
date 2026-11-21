@@ -63,7 +63,27 @@ class GateView:
     is_monitored: bool = True
     continuity_break_ratio: float = 0.0
     max_expected_velocity: float = 75.0
+    free_walking_speed_ms: float = 1.34
     extra: dict = field(default_factory=dict)
+
+    @property
+    def is_calibrated(self) -> bool:
+        return self.state is not None and self.state.velocity_unit == "m/s"
+
+    @property
+    def velocity_px(self) -> float:
+        """Crowd speed on the px/s scale the thresholds below are written in.
+
+        A calibrated camera reports m/s; free walking (1.34 m/s) corresponds to
+        the px/s free-flow calibration, so the same thresholds apply to both.
+        """
+        if self.is_calibrated:
+            return self.velocity / self.free_walking_speed_ms * self.max_expected_velocity
+        return self.velocity
+
+    @property
+    def speed_text(self) -> str:
+        return f"{self.velocity:.2f} m/s" if self.is_calibrated else f"{self.velocity:.1f} px/s"
 
     @property
     def crowd_count(self) -> float:
@@ -108,7 +128,7 @@ class GateView:
         """Whether the crowd here has meaningful bulk motion."""
         return (
             self.motion_status is MotionStatus.OK
-            and self.velocity >= MOVING_CROWD_VELOCITY_PX_S
+            and self.velocity_px >= MOVING_CROWD_VELOCITY_PX_S
         )
 
 
@@ -126,7 +146,7 @@ def _congestion_alerts(view: GateView) -> list[Alert]:
     count = view.crowd_count
     capacity = view.capacity
     util = view.utilization
-    velocity = view.velocity
+    velocity = view.velocity_px
     score = view.congestion_score
     level = view.congestion_level
     target = view.target_gate
@@ -135,7 +155,8 @@ def _congestion_alerts(view: GateView) -> list[Alert]:
         "crowd_count": round(count, 1),
         "capacity": capacity,
         "utilization": round(util, 3),
-        "velocity": round(velocity, 1),
+        "velocity": round(view.velocity, 2),
+        "velocity_unit": "m/s" if view.is_calibrated else "px/s",
         "congestion_score": round(score, 3),
         "congestion_level": level.value,
         "trend": view.trend.value,
@@ -156,7 +177,7 @@ def _congestion_alerts(view: GateView) -> list[Alert]:
             title=f"Crush risk at {gate}: dense crowd, almost no movement",
             description=(
                 f"{gate} holds about {count:.0f} people and the crowd is moving at only "
-                f"{velocity:.1f} px/s. Density with no outlet is the precondition for a "
+                f"{view.speed_text}. Density with no outlet is the precondition for a "
                 f"crush. Congestion score {score:.0%}."
             ),
             action=(
@@ -266,12 +287,12 @@ def _congestion_alerts(view: GateView) -> list[Alert]:
             gate_id=gate,
             title=f"Flow slowing at {gate}",
             description=(
-                f"{gate} has about {count:.0f} people moving at {velocity:.1f} px/s. "
+                f"{gate} has about {count:.0f} people moving at {view.speed_text}. "
                 f"Falling speed at steady density is how a crush begins."
             ),
             action=(
                 f"Watch {gate} closely and open an additional lane if possible. "
-                f"If speed falls below {CRUSH_VELOCITY_PX_S:.0f} px/s, divert."
+                f"If the crowd nearly stops, divert."
             ),
             detail=detail,
         )]
@@ -527,6 +548,7 @@ def _system_alerts(views: list[GateView]) -> list[Alert]:
             view.state is not None
             and view.is_monitored
             and view.state.motion_status is MotionStatus.OK
+            and not view.is_calibrated
             and view.velocity >= view.max_expected_velocity
         ):
             alerts.append(Alert(

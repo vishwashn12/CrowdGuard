@@ -2,11 +2,11 @@
  * score, and why the engine recommends what it does - including every other
  * gate it considered and why each was or wasn't chosen. */
 import { useEffect, useState } from 'react';
-import { ArrowRight, Check, X, AlertTriangle } from 'lucide-react';
+import { ArrowRight, Check, X, AlertTriangle, Radio, Ruler } from 'lucide-react';
 import type { Decision, Snapshot } from '../lib/types';
 import { api } from '../lib/api';
-import { gateMode, levelVar, pct } from '../lib/format';
-import { ActionChip, LevelBadge, Meter, Sparkline, VideoCanvas } from './bits';
+import { gateMode, levelVar, pct, speedText } from '../lib/format';
+import { InstructionText, LevelBadge, Meter, Sparkline, VerbIcon, VideoCanvas } from './bits';
 
 function Stat({ label, value, unit, tone }: { label: string; value: string | number; unit?: string; tone?: string }) {
   return (
@@ -58,7 +58,11 @@ export function GateDrawer({ snap, gateId, order, onClose, onSelect }: {
         <span className="drawer-id" style={{ borderColor: levelVar(g, running) }}>{g.gate_id}</span>
         <div className="drawer-title">
           <strong>{g.name}</strong>
-          <span>capacity {g.capacity} · {g.camera_id ?? 'no camera'}</span>
+          <span>
+            {g.calibration
+              ? <><Ruler size={11} /> zone {g.calibration.width_m}×{g.calibration.length_m} m · full at {g.capacity}</>
+              : g.is_monitored ? `not calibrated · assumes ${g.capacity} people` : `no camera · assumes ${g.capacity} people`}
+          </span>
         </div>
         <span className="spacer" />
         <LevelBadge g={g} running={running} />
@@ -83,10 +87,12 @@ export function GateDrawer({ snap, gateId, order, onClose, onSelect }: {
             </section>
 
             <section className="drawer-sec stats-grid">
-              <Stat label="people" value={Math.round(g.crowd_count)} unit={` / ${g.capacity}`} />
-              <Stat label="utilisation" value={pct(g.utilization)} />
+              <Stat label={g.calibration ? 'people in zone' : 'people'} value={Math.round(g.crowd_count)} unit={` / ${g.capacity}`} />
+              {g.density_m2 != null
+                ? <Stat label="density" value={g.density_m2.toFixed(1)} unit=" /m²" tone={g.density_m2 >= 4 ? 'warn' : undefined} />
+                : <Stat label="of assumed capacity" value={pct(g.utilization)} />}
               <Stat label="trend" value={g.trend.toLowerCase()} tone={g.trend === 'INCREASING' ? 'warn' : undefined} />
-              <Stat label="speed" value={g.velocity.toFixed(0)} unit=" px/s" />
+              <Stat label="speed" value={speedText(g).split(' ')[0]} unit={` ${g.velocity_unit}`} />
               <Stat label="flow coherence" value={pct(g.flow_consistency)} />
               <Stat label="tracks" value={g.track_count} />
               <Stat label="sitting / fallen" value={g.sitting_count} tone={g.sitting_count ? 'anom' : 'mute'} />
@@ -97,25 +103,40 @@ export function GateDrawer({ snap, gateId, order, onClose, onSelect }: {
         )}
 
         <section className="drawer-sec">
-          <h3>Recommendation</h3>
-          <div className="rec">
-            <ActionChip g={g} running={running} />
-            {live && route.length > 1 && (
-              <div className="route">
-                {route.map((id, i) => (
-                  <span key={`${id}-${i}`} className="route-step">
-                    {i > 0 && <ArrowRight size={12} />}
-                    <button type="button" className="mini-gate" onClick={() => onSelect(id)}>{id}</button>
-                  </span>
-                ))}
+          <h3>Instruction</h3>
+          {live && g.command ? (
+            <div className="cmd-card" data-level={g.command.level}>
+              <div className="cmd-head">
+                <VerbIcon verb={g.command.verb} size={20} />
+                <strong><InstructionText item={g.command} /></strong>
+                <span className="ins-reason">{g.command.reason}</span>
               </div>
-            )}
-          </div>
-          <p className="why">
-            {live ? (g.reason || 'Waiting for the first decision…')
-              : g.is_monitored ? 'Footage is staged. It plays when monitoring starts.'
-                : 'No camera on this gate. It can still receive diverted crowd, scored on its stated capacity with a safety penalty.'}
-          </p>
+              <p className="ins-radio"><Radio size={14} /> “{g.command.radio}”</p>
+              <p className="ins-detail">{g.command.detail}</p>
+              {route.length > 2 && (
+                <div className="route">
+                  {route.map((id, i) => (
+                    <span key={`${id}-${i}`} className="route-step">
+                      {i > 0 && <ArrowRight size={12} />}
+                      <button type="button" className="mini-gate" onClick={() => onSelect(id)}>{id}</button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="why">
+              {live ? 'No instruction. Keep watching.'
+                : g.is_monitored ? 'Footage is staged. It plays when monitoring starts.'
+                  : 'No camera on this gate. It can still receive diverted crowd, on an assumed load.'}
+            </p>
+          )}
+          {live && g.reason && (
+            <details className="why-more">
+              <summary>Why the engine decided this</summary>
+              <p className="why">{g.reason}</p>
+            </details>
+          )}
           {warnings.map((w) => (
             <div key={w} className="warn-line"><AlertTriangle size={13} />{w}</div>
           ))}

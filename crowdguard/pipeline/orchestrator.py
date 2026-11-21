@@ -48,6 +48,7 @@ import numpy as np
 
 from crowdguard.adapters.fusion_adapter import FusionAdapter
 from crowdguard.adapters.synchronizer import TemporalSynchronizer
+from crowdguard.alerts.commands import CommandBoard, present_alert
 from crowdguard.alerts.contracts import Alert
 from crowdguard.alerts.rules import GateView, generate_alerts
 from crowdguard.alerts.store import AlertStore
@@ -55,14 +56,17 @@ from crowdguard.config.schemas import AppConfig, CameraConfig
 from crowdguard.decision.config import DecisionConfig
 from crowdguard.decision.contracts import CrowdState, DecisionResult
 from crowdguard.decision.engine import DecisionEngine
+from crowdguard.decision.fusion import calibrated_capacity
 from crowdguard.decision.trend import TrendTracker
 from crowdguard.display.renderer import PlaybackRenderer
 from crowdguard.ingestion.camera_registry import CameraRegistry
 from crowdguard.ingestion.frame_buffer import FrameBuffer
 from crowdguard.models.contracts import AnomalyResult, CSRNetResult, MotionResult
 from crowdguard.models.manager import ModelManager
+from crowdguard.pipeline.calibration_store import CalibrationStore
 from crowdguard.pipeline.csrnet_worker import CSRNetWorker
 from crowdguard.pipeline.posetrack_worker import PoseTrackWorker
+from crowdguard.utils.calibration import GroundCalibration
 from crowdguard.utils.exceptions import SessionError
 from crowdguard.venue.builder import DEFAULT_CAPACITY, build_ring_topology
 from crowdguard.venue.loader import load_venue_topology
@@ -147,6 +151,8 @@ class Orchestrator:
         self.trends = TrendTracker(self.decision_config)
         self.engine = DecisionEngine(self.venue, self.decision_config)
         self.alerts = AlertStore(log_path=alert_log_path)
+        self.commands = CommandBoard()
+        self.calibrations = CalibrationStore(Path(config.uploads.directory) / "calibrations.json")
 
         # --- workers -------------------------------------------------
         self.csrnet_worker: CSRNetWorker | None = None
@@ -363,7 +369,9 @@ class Orchestrator:
             self.state.set_session("setup")
             self.state.reset_gate_metrics()
             self.alerts.clear()
+            self.commands.reset()
             self.state.update_alerts(alerts=[], counts={}, incidents=[])
+            self.state.update_instructions([], [], [])
 
             for camera_id in self.cameras.camera_ids:
                 self._publish_preview(camera_id)
@@ -389,6 +397,8 @@ class Orchestrator:
         self.trends.reset()
         self.engine.reset_hysteresis()
         self.alerts.clear()
+        self.commands.reset()
+        self.state.update_instructions([], [], [])
 
         self.synchronizer.reset_counters()
         self.density_buffer.reset_counters()
@@ -432,6 +442,7 @@ class Orchestrator:
 
     def _remove_camera_unlocked(self, camera_id: str) -> str | None:
         gate_id = self.cameras.remove_camera(camera_id)
+        self.calibrations.delete(camera_id)
 
         self.renderer.unregister(camera_id)
         self.models.release_camera(camera_id)
@@ -472,6 +483,7 @@ class Orchestrator:
         producer = self.cameras.get_producer(camera_id)
         fps = producer.source_fps if producer is not None else 25.0
         self.renderer.register(camera_id, fps)
+        self._apply_calibration(camera_id)
         self._publish_preview(camera_id)
 
     def _publish_preview(self, camera_id: str) -> None:
@@ -486,6 +498,58 @@ class Orchestrator:
             frame = np.full((540, 960, 3), 24, dtype=np.uint8)
         image, _ = scale_for_display(frame, self.config.display.width)
         self.state.update_frame(gate_id, encode_jpeg(render_preview(image, gate_id), 80))
+
+    # ------------------------------------------------------------------
+    # Ground calibration (setup only)
+    # ------------------------------------------------------------------
+
+    def _apply_calibration(self, camera_id: str) -> None:
+        if self.models.posetrack_enabled:
+            self.models.posetrack.set_ground_calibration(camera_id, self.calibrations.get(camera_id))
+
+    def calibration_for_gate(self, gate_id: str) -> GroundCalibration | None:
+        return self.calibrations.get(self.venue.camera_for_gate(gate_id))
+
+    def effective_capacity(self, gate_id: str) -> int:
+        """A calibrated gate's capacity follows from its zone; others use the venue value."""
+        calibration = self.calibration_for_gate(gate_id)
+        if calibration is not None:
+            return calibrated_capacity(calibration.area_m2, self.decision_config)
+        return self.venue.get_gate_capacity(gate_id)
+
+    def set_calibration(self, gate_id: str, calibration: GroundCalibration | None) -> dict | None:
+        """Calibrate (or, with None, uncalibrate) the camera on a gate.
+
+        Raises:
+            SessionError: If a session is running.
+            ValueError: If the gate has no camera.
+        """
+        with self._session_lock:
+            self._require_setup()
+            camera_id = self.venue.camera_for_gate(gate_id)
+            if camera_id is None:
+                raise ValueError(f"{gate_id} has no footage to calibrate.")
+            if calibration is None:
+                self.calibrations.delete(camera_id)
+            else:
+                self.calibrations.set(camera_id, calibration)
+            self._apply_calibration(camera_id)
+            self._sync_gates_to_state()
+            logger.info("Calibration for %s (%s): %s", gate_id, camera_id,
+                        calibration.to_dict() if calibration else "cleared")
+            return calibration.to_dict() if calibration else None
+
+    def still_frame(self, gate_id: str, max_width: int = 1280) -> bytes | None:
+        """The first frame of a gate's footage, without overlays, for calibration."""
+        camera_id = self.venue.camera_for_gate(gate_id)
+        camera = self.cameras.get_config(camera_id) if camera_id else None
+        if camera is None:
+            return None
+        frame = self._first_frame(camera)
+        if frame is None:
+            return None
+        image, _ = scale_for_display(frame, max_width)
+        return encode_jpeg(image, 88)
 
     @staticmethod
     def _first_frame(camera: CameraConfig) -> np.ndarray | None:
@@ -559,6 +623,7 @@ class Orchestrator:
                 self._latest_states = {}
                 self._latest_decisions = {}
             self.alerts.clear()
+            self.commands.reset()
 
             removed_gates = self.state.retain_gates(set(new_venue.gate_ids))
             self.state.reset_counters()
@@ -586,11 +651,13 @@ class Orchestrator:
         """Mirror the venue's gate and camera mapping into the dashboard."""
         for gate_id in self.venue.gate_ids:
             gate = self.venue.get_gate(gate_id)
+            calibration = self.calibrations.get(gate.camera_id)
             self.state.register_gate(
                 gate_id=gate_id,
-                capacity=gate.capacity,
+                capacity=self.effective_capacity(gate_id),
                 name=gate.name,
                 camera_id=gate.camera_id,
+                calibration=calibration.to_dict() if calibration else None,
             )
         self.state.venue_summary = self.venue.summary()
 
@@ -715,6 +782,7 @@ class Orchestrator:
                 trend=self.trends.get_trend(gate_id),
                 stale_frame_gap=self.stale_frame_gap,
                 sync_result=sync_result,
+                calibration=self.calibrations.get(camera_id),
             )
             states[gate_id] = crowd_state
             self.trends.update(gate_id, crowd_state.congestion_score)
@@ -749,7 +817,7 @@ class Orchestrator:
 
             views[gate_id] = GateView(
                 gate_id=gate_id,
-                capacity=gate.capacity,
+                capacity=self.effective_capacity(gate_id),
                 state=states.get(gate_id),
                 decision=decisions.get(gate_id),
                 anomaly=anomaly,
@@ -757,14 +825,29 @@ class Orchestrator:
                 is_monitored=camera_id is not None,
                 continuity_break_ratio=continuity_ratio if camera_id else 0.0,
                 max_expected_velocity=self.decision_config.congestion_weights.max_expected_velocity,
+                free_walking_speed_ms=self.decision_config.free_walking_speed_ms,
             )
 
         alerts: list[Alert] = generate_alerts(views)
         self.alerts.submit(alerts)
+        active = self.alerts.active()
+        history = self.alerts.history(limit=50)
         self.state.update_alerts(
-            alerts=self.alerts.active(),
+            alerts=active,
             counts=self.alerts.counts_by_severity(),
-            incidents=self.alerts.history(limit=25),
+            incidents=history[:25],
+        )
+
+        commands, incidents = self.commands.build(
+            decisions=decisions,
+            alerts=active,
+            states=states,
+            capacities={g: view.capacity for g, view in views.items()},
+            now=time.time(),
+        )
+        log = [entry for entry in (present_alert(a) for a in history) if entry is not None]
+        self.state.update_instructions(
+            [c.to_dict() for c in commands], [i.to_dict() for i in incidents], log,
         )
 
     # ------------------------------------------------------------------

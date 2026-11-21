@@ -109,6 +109,8 @@ class CrowdState:
         motion_provenance: Human-readable description of the motion source.
         motion_age_frames: Frame-id gap between the density and motion sources.
         is_synthetic: True when the state was injected for simulation or testing.
+        velocity_unit: "px/s" for an uncalibrated camera, "m/s" for a calibrated one.
+        area_m2: Area of the calibrated ground zone, or None when uncalibrated.
     """
 
     gate_id: str
@@ -138,6 +140,9 @@ class CrowdState:
 
     is_synthetic: bool = False
 
+    velocity_unit: str = "px/s"
+    area_m2: float | None = None
+
     def __post_init__(self) -> None:
         if not self.gate_id:
             raise ValueError("gate_id must not be empty")
@@ -158,6 +163,15 @@ class CrowdState:
     def capacity_utilization(self) -> float:
         """Alias of ``density_score``, which is already count/capacity clamped."""
         return self.density_score
+
+    @property
+    def is_calibrated(self) -> bool:
+        return self.area_m2 is not None and self.area_m2 > 0
+
+    @property
+    def density_per_m2(self) -> float | None:
+        """Physical crowd density in the calibrated zone, people/m^2."""
+        return self.crowd_count / self.area_m2 if self.is_calibrated else None
 
 
 # ===================================================================

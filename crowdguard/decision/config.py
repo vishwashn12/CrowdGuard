@@ -132,6 +132,18 @@ class DecisionConfig(BaseModel):
                     "attractive target in the venue.",
     )
 
+    calibrated_capacity_density: float = Field(
+        default=5.0, gt=0,
+        description="People per square metre at which a calibrated zone counts as full. "
+                    "A calibrated gate's capacity is its zone area times this. 5/m^2 is "
+                    "where crowd-safety guidance places serious crush risk.",
+    )
+    free_walking_speed_ms: float = Field(
+        default=1.34, gt=0,
+        description="Walking speed of a freely flowing crowd in m/s (Weidmann). For "
+                    "calibrated gates this replaces max_expected_velocity, which is in px/s.",
+    )
+
     trend_window_size: int = Field(
         default=5, ge=2,
         description="Observations retained per gate for trend calculation",

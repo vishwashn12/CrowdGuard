@@ -30,12 +30,7 @@ export const api = {
   venueConfig: () => json<VenueConfig>('/api/venue/config'),
   decisions: () => json<Record<string, Decision>>('/api/decisions'),
 
-  configureVenue: (body: {
-    gate_count: number;
-    default_capacity?: number;
-    radius_m?: number;
-    venue_name?: string;
-  }) =>
+  configureVenue: (body: { gate_count: number; venue_name?: string }) =>
     json<{ gate_count: number; cameras_kept: string[]; cameras_stopped: string[] }>(
       '/api/venue/configure',
       { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
@@ -61,6 +56,16 @@ export const api = {
       clearTimeout(timer);
     }
   },
+
+  setCalibration: (gateId: string, body: { points: [number, number][]; width_m: number; length_m: number }) =>
+    json<{ capacity: number }>(`/api/gates/${encodeURIComponent(gateId)}/calibration`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    }),
+
+  clearCalibration: (gateId: string) =>
+    json<{ capacity: number }>(`/api/gates/${encodeURIComponent(gateId)}/calibration`, { method: 'DELETE' }),
+
+  stillUrl: (gateId: string) => `/api/gates/${encodeURIComponent(gateId)}/still?t=${Date.now()}`,
 
   removeCamera: (cameraId: string) =>
     json<{ gate_id: string }>(`/api/cameras/${encodeURIComponent(cameraId)}`, { method: 'DELETE' }),
