@@ -71,7 +71,7 @@ The congestion formula is unchanged; only its inputs change units. A calibrated 
 
 Alert-rule speed thresholds, written in px/s, are applied to calibrated gates on the same scale (1.34 m/s ↔ 75 px/s).
 
-**Uncalibrated gates** keep the old behaviour, with a default capacity of **200 people** (was 500). Gates without a camera also assume 200.
+**Uncalibrated gates** keep the old behaviour, with a default capacity of **300 people** (was 500). Gates without a camera also assume 300.
 
 Calibrations are stored per camera in `uploads/calibrations.json` and survive restarts. Replacing a gate's footage starts it uncalibrated.
 
@@ -84,7 +84,7 @@ Measured on 4 frames of the G1 demo clip, with the zone over the near half of th
 | CSRNet (ShanghaiTech A) | 133–148 | **9–14** |
 | YOLOv8m-pose detections | 60–73 | **27–38** |
 
-CSRNet places ~93% of its count on the dense far end of the corridor and under-counts large people near the camera by about 3×. The detector has the opposite weakness (it misses small distant people). Inside a near-camera zone the detector is the better count. The zone count therefore takes the larger of the two, the conservative choice. *Paper note:* this is one camera and four frames. A proper evaluation needs annotated zone counts (see [10](10_limitations_future_work.md), item 7).
+CSRNet places ~93% of its count on the dense far end of the corridor and under-counts large people near the camera by about 3×. The detector has the opposite weakness (it misses small distant people). Inside a near-camera zone the detector is the better count. The zone count therefore takes the larger of the two, the conservative choice. **Decision (2026-11-21):** keep the larger-of-the-two rule; a hand-counted validation was judged unnecessary for now. *Paper note:* the evidence is one camera and four frames. A proper evaluation needs annotated zone counts (see [10](10_limitations_future_work.md), item 7).
 
 ### Limits
 
@@ -95,4 +95,4 @@ CSRNet places ~93% of its count on the dense far end of the corridor and under-c
 ## 3. Other changes
 
 - **At most 12 gates** (was 24).
-- **Setup no longer asks for capacity or radius.** Capacity comes from calibration, or the default 200. The radius was removed from the UI because it cannot affect any decision: routing uses distance ÷ the venue's largest distance, and both scale with the radius. It still sets the metres quoted in reasons and in the simulator's walking times.
+- **Setup no longer asks for capacity or radius.** Capacity comes from calibration, or the default 300. The radius was removed from the UI because it cannot affect any decision: routing uses distance ÷ the venue's largest distance, and both scale with the radius. It still sets the metres quoted in reasons and in the simulator's walking times.

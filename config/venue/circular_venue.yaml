@@ -24,30 +24,30 @@ venue:
   gates:
     - gate_id: G1
       name: North Gate
-      capacity: 200
+      capacity: 300
       position_index: 0
 
     - gate_id: G2
       name: North-East Gate
-      capacity: 200
+      capacity: 300
       position_index: 1
 
     - gate_id: G3
       name: South-East Gate
-      capacity: 200
+      capacity: 300
       position_index: 2
 
     - gate_id: G4
       name: South Gate
-      capacity: 200
+      capacity: 300
       position_index: 3
 
     - gate_id: G5
       name: South-West Gate
-      capacity: 200
+      capacity: 300
       position_index: 4
 
     - gate_id: G6
       name: North-West Gate
-      capacity: 200
+      capacity: 300
       position_index: 5

@@ -204,7 +204,7 @@ export function SetupView({ snap, busy, onSession }: Props) {
             <div>
               <h2>Footage and calibration</h2>
               <p>Add a video per gate, then <b>calibrate</b> it: mark a rectangle on the ground and enter its size.
-                Calibrated gates are measured in people per m² and m/s. Uncalibrated gates assume they are full at 200 people.</p>
+                Calibrated gates are measured in people per m² and m/s. Uncalibrated gates assume they are full at 300 people.</p>
             </div>
           </header>
 

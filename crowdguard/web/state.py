@@ -30,7 +30,7 @@ class GateState:
 
     gate_id: str
     name: str | None = None
-    capacity: int = 200
+    capacity: int = 300
     camera_id: str | None = None
     is_monitored: bool = False
 

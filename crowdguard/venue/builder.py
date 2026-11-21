@@ -21,7 +21,7 @@ from crowdguard.venue.topology import VenueTopology
 MIN_GATES = 2
 MAX_GATES = 12
 
-DEFAULT_CAPACITY = 200
+DEFAULT_CAPACITY = 300
 DEFAULT_RADIUS_M = 120.0
 
 # Compass-style names for the common small layouts, so a 4-gate venue reads

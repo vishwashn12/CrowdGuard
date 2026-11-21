@@ -47,14 +47,14 @@ Open <http://localhost:8000> and use the **Setup** tab:
 2. **Add footage and calibrate.** Upload a video per gate, then press
    **Calibrate**: click the four corners of a rectangle on the ground in the
    frame and enter its real size in metres. Calibrated gates are measured in
-   people/m² and m/s; uncalibrated gates assume they are full at 200 people.
+   people/m² and m/s; uncalibrated gates assume they are full at 300 people.
    See `docs/13_instructions_and_calibration.md`.
 3. **Start monitoring.** Every gate with footage begins at the same instant and
    plays at the footage's real frame rate. Clips loop when they end.
 
 While monitoring runs, setup is locked. **Stop** returns you to setup with all
 footage still in place. Gates left without footage still take part in routing as
-diversion targets, assuming 200 people.
+diversion targets, assuming 300 people.
 
 To start with feeds already staged, use the demo config, which reads (and never
 writes) the sample clips in the sibling project. You still press Start; pass
