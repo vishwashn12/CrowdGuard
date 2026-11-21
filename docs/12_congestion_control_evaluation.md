@@ -1,5 +1,7 @@
 # 12: Evaluating the congestion-control decisions
 
+> **Update:** engine v2 addresses the weaknesses below; its design record and held-out results are in [14](14_engine_v2.md).
+
 This is how CrowdGuard's rule-based diversion logic is tested, and the baseline results for the current engine (**engine v1**). Every later rule change is measured with the same suite, so the paper and slides can show *before vs after* on identical tests.
 
 All three test layers are automatic: they produce pass/fail or numbers, with no manual checking.

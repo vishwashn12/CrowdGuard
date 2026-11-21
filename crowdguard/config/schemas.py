@@ -282,10 +282,11 @@ class AppConfig(BaseModel):
     uploads: UploadConfig = Field(default_factory=UploadConfig)
     venue_config: str = Field(default="config/venue/circular_venue.yaml")
     decision_engine: Literal["v1", "v2"] = Field(
-        default="v1",
-        description="Which decision engine drives live recommendations. v2 adds steady "
-                    "diversions, venue-wide coordination, stale-target checks and a short "
-                    "forecast (docs/14).",
+        default="v2",
+        description="Which decision engine drives live recommendations. v2 (default since "
+                    "it won the held-out evaluation, docs/14) adds steady diversions, "
+                    "venue-wide coordination, stale-target checks and a short forecast. "
+                    "Set v1 to reproduce the original behaviour.",
     )
 
     @model_validator(mode="after")

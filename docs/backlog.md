@@ -8,7 +8,11 @@ Work we have agreed to do but have parked. Newest decisions first. Each item say
 
 - **Walking distance between gates** is editable per segment (setup, venue model, map, simulator); uneven-spacing scenario added; the v1 baseline was re-run with it (`reports/decision_eval/engine_v1_baseline`).
 
-## 1. Decision engine v2 (deferred 2026-11-21)
+## 1. Decision engine v2: DONE 2026-11-21, see [14](14_engine_v2.md)
+
+Kept: steady diversion, coordination, stale-target check, forecast. Rejected: nearest-with-room and three share schemes. **Still open:** escalation to hold people back (needs a combined divert + hold action), walking distance (W7).
+
+### Original plan
 
 **Why.** The v1 baseline ([12](12_congestion_control_evaluation.md)) shows diversion works, but it also has four failing known-weakness tests (K1–K4) and six measured weaknesses (W1–W6).
 

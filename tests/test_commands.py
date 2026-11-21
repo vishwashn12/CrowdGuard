@@ -151,4 +151,5 @@ def test_forecast_and_held_diversions_say_why():
 def test_live_system_can_run_engine_v2():
     from crowdguard.config.schemas import AppConfig
     assert AppConfig(decision_engine="v2").decision_engine == "v2"
-    assert AppConfig().decision_engine == "v1"
+    assert AppConfig().decision_engine == "v2"
+    assert AppConfig(decision_engine="v1").decision_engine == "v1"

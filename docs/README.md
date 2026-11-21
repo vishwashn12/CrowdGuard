@@ -27,6 +27,7 @@ Every number here was either read from the code or artifacts, or measured on the
 | [11_reproducibility.md](11_reproducibility.md) | Versions, hardware, commands, seeds, file inventory, commit history | Reproducibility / appendix |
 | [12_congestion_control_evaluation.md](12_congestion_control_evaluation.md) | How the rule-based decisions are tested: scenario suite, invariants, closed-loop simulation; baseline results for engine v1 and its known weaknesses | Method: evaluation, Results |
 | [13_instructions_and_calibration.md](13_instructions_and_calibration.md) | Operator commands/incidents vocabulary; 4-point ground calibration (people/m², m/s); CSRNet near-camera under-count finding | Method: decision support UI, calibration; Discussion |
+| [14_engine_v2.md](14_engine_v2.md) | Engine v2: four rule changes, rejected alternatives with numbers, held-out v1-vs-v2 results, ablation, slide statements | Method: decision layer v2; Results; Ablation |
 | [backlog.md](backlog.md) | Agreed but deferred work: engine v2 plan, ablation run-time estimates, feature removal, better inputs | (planning, not a paper section) |
 
 ## Key numbers
@@ -44,7 +45,7 @@ Every number here was either read from the code or artifacts, or measured on the
 | Detector recall on labelled seated people | 26% with the shipped detector (pose-m @1280); 45% best observed (det-l @1440) | own study, IoU ≥ 0.3 |
 | Real-time | 3 cameras, 27 fps playback per gate, 3.9 analysed fps per gate, on an RTX 3050 6 GB laptop GPU | live measurement |
 | Tests | 954 tests + 4 expected failures (known engine weaknesses), no GPU needed | `pytest` |
-| Decision evaluation | engine v1 removes > 99.9% of exposure at ≥5 people/m² vs no control in 6 simulated scenarios; up to 1,426 instruction changes/h | [12](12_congestion_control_evaluation.md) |
+| Decision evaluation | v1: > 99.9% less dangerous exposure than no control, but up to 1,458 instruction changes/h and fragile to slow instructions. v2: zero dangerous exposure in all 8 scenarios, 4–9× fewer instruction changes, robust to 3-min delays and 40% compliance (held-out seeds) | [12](12_congestion_control_evaluation.md), [14](14_engine_v2.md) |
 
 ## Contributions you can defensibly claim
 
